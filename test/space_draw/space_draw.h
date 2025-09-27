@@ -5,6 +5,7 @@
 #include "drawer/svg_drawer.h"
 #include <nlohmann/json.hpp>
 #include <iostream>
+#include "cell_region.h"
 
 using json = nlohmann::json;
 
@@ -77,8 +78,8 @@ struct cell_region_config
 	spiritsaway::shape_drawer::Point min_xy;
 	spiritsaway::shape_drawer::Point max_xy;
 	std::vector< LabelPoint> points;
+	std::string name;
 	int color_idx;
-	NLOHMANN_DEFINE_TYPE_INTRUSIVE(cell_region_config, min_xy, max_xy, points);
 
 	cell_region_config calc_union(const cell_region_config& other) const
 	{
@@ -111,28 +112,31 @@ struct agent_info
 	void draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) const;
 };
 
+struct space_draw_config
+{
+	spiritsaway::shape_drawer::Color real_region_color; // real区域的颜色
+	spiritsaway::shape_drawer::Color ghost_region_color; // ghost 区域的颜色
+	spiritsaway::shape_drawer::Color point_color; // entity的边框与文字颜色
+	spiritsaway::shape_drawer::Color split_color; // cell分割线的颜色
+	std::uint16_t canvas_width;  // 全图宽度
+	std::uint16_t canvas_height; // 全图高度
+	std::string font_name; // 字体名字
+	std::uint16_t font_size; // 字体大小
+	std::uint16_t real_point_radius; // real entity的半径
+	std::uint16_t ghost_point_radius; // 每一层ghost会给这个entity增加的一个外围环的额外半径
+	std::uint16_t ghost_radius; // region的ghost半径
+	std::uint16_t boundary_radius; // 全图周边留白的部分
+	std::vector<spiritsaway::shape_drawer::Color> region_colors; // 所有region可以使用的颜色
+};
 struct cell_agents
 {
 	std::vector<cell_region_config> regions;
 	std::vector<std::vector<std::uint8_t>> region_adjacent_matrix;
-	std::vector<spiritsaway::shape_drawer::Color> region_colors;
+	
 	std::unordered_map<std::string, agent_info> agents;
+	std::vector<spiritsaway::shape_drawer::Line> split_lines;
 
-	spiritsaway::shape_drawer::Color real_region_color;
-	spiritsaway::shape_drawer::Color ghost_region_color;
-	spiritsaway::shape_drawer::Color real_point_color;
-	spiritsaway::shape_drawer::Color ghost_point_color;
-	std::string font_name;
-	std::uint16_t font_size;
-	std::uint16_t real_point_radius;
-	std::uint16_t ghost_point_radius;
-	std::uint16_t ghost_radius;
-	std::uint16_t circle_stroke;
-	std::uint16_t region_stroke;
-	std::uint16_t boundary_radius;
-
-
-	NLOHMANN_DEFINE_TYPE_INTRUSIVE(cell_agents, regions, real_region_color, ghost_region_color, real_point_color, ghost_point_color, font_name, font_size, real_point_radius, ghost_point_radius, circle_stroke, region_stroke, boundary_radius, region_colors);
+	space_draw_config draw_config;
 
 
 	spiritsaway::shape_drawer::Point space_origin_offset;
@@ -150,3 +154,5 @@ struct cell_agents
 
 
 json load_json_file(const std::string& file_path);
+
+void draw_cell_region(const spiritsaway::utility::cell_region& cur_cell_region, const space_draw_config& draw_config);

@@ -71,11 +71,11 @@ namespace spiritsaway::utility
 		return std::sqrt(square_sum/total_weights);
 	}
 	
-	void cell_region::cell_node::add_load(double cur_load, std::vector<entity_load>& new_entity_loads)
+	void cell_region::cell_node::add_load(double cur_load, const std::vector<entity_load>& new_entity_loads)
 	{
 		m_cell_load_counter++;
 		m_cell_loads[m_cell_load_counter % m_cell_loads.size()] = cur_load;
-		m_entity_loads = std::move(new_entity_loads);
+		m_entity_loads = new_entity_loads;
 	}
 
 	cell_region::cell_node* cell_region::cell_node::split_x(double x, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id, const std::string& new_parent_space_id)
@@ -631,12 +631,16 @@ namespace spiritsaway::utility
 		m_root_cell = nullptr;
 	}
 
-	void cell_region::add_load(const std::string& cell_space_id, double cell_load)
+	void cell_region::add_load(const std::string& cell_space_id, double cell_load, const std::vector<entity_load>& new_entity_loads)
 	{
 		auto cur_node_iter = m_cells.find(cell_space_id);
 		if(cur_node_iter == m_cells.end())
 		{
 			return;
+		}
+		if (cur_node_iter->second->is_leaf())
+		{
+			cur_node_iter->second->add_load(cell_load, new_entity_loads);
 		}
 
 	}

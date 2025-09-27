@@ -12,8 +12,9 @@ namespace spiritsaway::utility
 	{
 		std::array<double, 2> pos; // (x,z)
 		double load;
+		bool is_real;
 		std::string name;
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(entity_load, pos, load, name)
+		NLOHMANN_DEFINE_TYPE_INTRUSIVE(entity_load, pos, load, name, is_real)
 	};
 
 	class cell_region
@@ -77,7 +78,15 @@ namespace spiritsaway::utility
 			{
 				return m_ready;
 			}
+			const auto& get_entity_loads() const
+			{
+				return m_entity_loads;
+			}
 
+			bool is_split_x() const
+			{
+				return m_is_split_x;
+			}
 			const std::string& space_id() const
 			{
 				return m_space_id;
@@ -106,7 +115,7 @@ namespace spiritsaway::utility
 
 			json encode() const;
 			double get_smoothed_load() const;
-			void add_load(double cur_load, std::vector<entity_load>& new_entity_loads);
+			void add_load(double cur_load, const std::vector<entity_load>& new_entity_loads);
 			// 计算如果需要减少load_to_offset的负载，应该切分的位置
 			bool calc_offset_axis(double load_to_offset, double& out_split_axis, double& offseted_load) const;
 		private:
@@ -152,6 +161,10 @@ namespace spiritsaway::utility
 		{
 			return m_root_cell;
 		}
+		const auto& all_cells() const
+		{
+			return m_cells;
+		}
 		bool set_ready(const std::string& space_id);
 		json encode() const;
 		bool decode(const json& data);
@@ -161,7 +174,7 @@ namespace spiritsaway::utility
 		{
 			return m_master_cell_id;
 		}
-		void add_load(const std::string& cell_space_id, double cell_load);
+		void add_load(const std::string& cell_space_id, double cell_load, const std::vector<entity_load>& new_entity_loads);
 		~cell_region();
 	};
 }

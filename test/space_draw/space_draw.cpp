@@ -118,7 +118,7 @@ void cell_agents::calc_region_adjacent_matrix()
 	{
 		for (int j = i + 1; j < regions.size(); j++)
 		{
-			if (regions[i].intersect(regions[j], boundary_radius))
+			if (regions[i].intersect(regions[j], draw_config.boundary_radius))
 			{
 				region_adjacent_matrix[i][j] = 1;
 				region_adjacent_matrix[j][i] = 1;
@@ -141,7 +141,7 @@ bool cell_agents::check_region_color_match(int target) const
 bool cell_agents::calc_region_colors_recursive(int i)
 {
 
-	for (int j = 0; j < region_colors.size(); j++)
+	for (int j = 0; j < draw_config.region_colors.size(); j++)
 	{
 		regions[i].color_idx = j;
 		if (!check_region_color_match(i))
@@ -179,19 +179,19 @@ void cell_agents::calc_agents()
 			if (cur_item.region_colors.empty())
 			{
 				cur_item.name = one_point.label;
-				cur_item.color = real_point_color;
+				cur_item.color = draw_config.point_color;
 				cur_item.pos = one_point.pos;
-				cur_item.font_name = font_name;
-				cur_item.font_size = font_size;
+				cur_item.font_name = draw_config.font_name;
+				cur_item.font_size = draw_config.font_size;
 			}
-			cur_item.region_colors.push_back(region_colors[one_region.color_idx]);
+			cur_item.region_colors.push_back(draw_config.region_colors[one_region.color_idx]);
 			if (one_point.is_real)
 			{
-				cur_item.radius += real_point_radius;
+				cur_item.radius += draw_config.real_point_radius;
 			}
 			else
 			{
-				cur_item.radius += ghost_point_radius;
+				cur_item.radius += draw_config.ghost_point_radius;
 			}
 			
 		}
@@ -212,8 +212,8 @@ Point cell_agents::calc_canvas()
 	full_region.min_xy.x = 0;
 	full_region.min_xy.y = 0;
 
-	full_region.min_xy -= boundary_radius * Point(1, 1);
-	full_region.max_xy += boundary_radius * Point(1, 1);
+	full_region.min_xy -= draw_config.boundary_radius * Point(1, 1);
+	full_region.max_xy += draw_config.boundary_radius * Point(1, 1);
 	space_min_xy_offset = -1 * full_region.min_xy;
 
 	space_origin_offset = space_min_xy_offset - cur_aabb_region.min_xy;
@@ -227,18 +227,18 @@ void cell_agents::draw_png(PngImage& out_png) const
 
 		one_region.min_xy += space_origin_offset;
 		one_region.max_xy += space_origin_offset;
-		shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, region_colors[one_region.color_idx], false);
-		cur_rect.stroke_color = region_colors[one_region.color_idx];
+		shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, draw_config.region_colors[one_region.color_idx], false);
+		cur_rect.stroke_color = draw_config.region_colors[one_region.color_idx];
 		out_png << cur_rect;
 	}
 	for (const auto& one_region : regions)
 	{
 		cell_space cur_cell_space;
-		cur_cell_space.font_name = font_name;
-		cur_cell_space.font_sz = font_size;
-		cur_cell_space.ghost_color = ghost_region_color;
-		cur_cell_space.ghost_radius = ghost_radius;
-		cur_cell_space.real_color = real_region_color;
+		cur_cell_space.font_name = draw_config.font_name;
+		cur_cell_space.font_sz = draw_config.font_size;
+		cur_cell_space.ghost_color = draw_config.ghost_region_color;
+		cur_cell_space.ghost_radius = draw_config.ghost_radius;
+		cur_cell_space.real_color = draw_config.real_region_color;
 
 		cur_cell_space.offset = space_min_xy_offset;
 		cur_cell_space.max_xy = one_region.max_xy;
@@ -255,8 +255,8 @@ void cell_agents::draw_svg(SvgGraph& out_svg) const
 
 		one_region.min_xy += space_origin_offset;
 		one_region.max_xy += space_origin_offset;
-		shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, region_colors[one_region.color_idx], false, 1.0);
-		cur_rect.stroke_color = region_colors[one_region.color_idx];
+		shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, draw_config.region_colors[one_region.color_idx], false, 1.0);
+		cur_rect.stroke_color = draw_config.region_colors[one_region.color_idx];
 
 		out_svg << cur_rect;
 	}
@@ -264,11 +264,11 @@ void cell_agents::draw_svg(SvgGraph& out_svg) const
 	for (const auto& one_region : regions)
 	{
 		cell_space cur_cell_space;
-		cur_cell_space.font_name = font_name;
-		cur_cell_space.font_sz = font_size;
-		cur_cell_space.ghost_color = ghost_region_color;
-		cur_cell_space.ghost_radius = ghost_radius;
-		cur_cell_space.real_color = real_region_color;
+		cur_cell_space.font_name = draw_config.font_name;
+		cur_cell_space.font_sz = draw_config.font_size;
+		cur_cell_space.ghost_color = draw_config.ghost_region_color;
+		cur_cell_space.ghost_radius = draw_config.ghost_radius;
+		cur_cell_space.real_color = draw_config.real_region_color;
 		cur_cell_space.offset = space_min_xy_offset;
 		cur_cell_space.max_xy = one_region.max_xy;
 		cur_cell_space.min_xy = one_region.min_xy;
@@ -412,3 +412,53 @@ json load_json_file(const std::string& file_path)
 	return json::parse(str);
 }
 
+
+void draw_cell_region(const spiritsaway::utility::cell_region& cur_cell_region, const space_draw_config& draw_config)
+{
+	cell_agents cur_cell_configuration;
+	cur_cell_configuration.draw_config = draw_config;
+	for (const auto& [one_cell_id, one_cell_ptr] : cur_cell_region.all_cells())
+	{
+		if (one_cell_ptr->is_leaf())
+		{
+			cell_region_config new_leaf_config;
+			new_leaf_config.min_xy.x = one_cell_ptr->boundary().left_x;
+			new_leaf_config.min_xy.y = one_cell_ptr->boundary().low_z;
+			new_leaf_config.max_xy.x = one_cell_ptr->boundary().right_x;
+			new_leaf_config.max_xy.y = one_cell_ptr->boundary().high_z;
+			new_leaf_config.name = one_cell_ptr->game_id() + "::" + one_cell_ptr->space_id();
+			new_leaf_config.points.reserve(one_cell_ptr->get_entity_loads().size());
+			for (const auto& one_entity : one_cell_ptr->get_entity_loads())
+			{
+				LabelPoint temp_point;
+				temp_point.is_real = one_entity.is_real;
+				temp_point.label = one_entity.name;
+				temp_point.pos.x = one_entity.pos[0];
+				temp_point.pos.y = one_entity.pos[1];
+				new_leaf_config.points.push_back(temp_point);
+			}
+			cur_cell_configuration.regions.push_back(new_leaf_config);
+		}
+		else
+		{
+			auto cur_child_aabb = one_cell_ptr->children()[0]->boundary();
+			spiritsaway::shape_drawer::Line temp_split_line;
+			if (one_cell_ptr->is_split_x())
+			{
+				temp_split_line.from.x = cur_child_aabb.right_x;
+				temp_split_line.to.x = cur_child_aabb.right_x;
+				temp_split_line.from.y = cur_child_aabb.low_z;
+				temp_split_line.to.y = cur_child_aabb.high_z;
+
+			}
+			else
+			{
+				temp_split_line.from.y = cur_child_aabb.high_z;
+				temp_split_line.to.y = cur_child_aabb.high_z;
+				temp_split_line.from.x = cur_child_aabb.left_x;
+				temp_split_line.to.x = cur_child_aabb.right_x;
+			}
+			cur_cell_configuration.split_lines.push_back(temp_split_line);
+		}
+	}
+}
