@@ -96,7 +96,7 @@ struct space_draw_container
 
 	space_draw_config draw_config;
 	double draw_scale;
-
+	double ghost_radius;
 	// spiritsaway::shape_drawer::Point space_origin_offset;
 	spiritsaway::shape_drawer::Point region_min_xy;
 

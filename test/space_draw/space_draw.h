@@ -5,7 +5,7 @@
 #include "drawer/svg_drawer.h"
 #include <nlohmann/json.hpp>
 #include <iostream>
-#include "cell_region.h"
+#include "space_cells.h"
 
 using json = nlohmann::json;
 
@@ -28,21 +28,21 @@ namespace spiritsaway::shape_drawer
 
 struct space_draw_config
 {
-	spiritsaway::shape_drawer::Color real_region_color; // realÇøÓòµÄÑÕÉ«
-	spiritsaway::shape_drawer::Color ghost_region_color; // ghost ÇøÓòµÄÑÕÉ«
-	spiritsaway::shape_drawer::Color point_color; // entityµÄ±ß¿òÓëÎÄ×ÖÑÕÉ«
-	spiritsaway::shape_drawer::Color split_color; // cell·Ö¸îÏßµÄÑÕÉ«
-	std::uint16_t canvas_radius;  // È«Í¼°ë¾¶
+	spiritsaway::shape_drawer::Color real_region_color; // realåŒºåŸŸçš„é¢œè‰²
+	spiritsaway::shape_drawer::Color ghost_region_color; // ghost åŒºåŸŸçš„é¢œè‰²
+	spiritsaway::shape_drawer::Color point_color; // entityçš„è¾¹æ¡†ä¸æ–‡å­—é¢œè‰²
+	spiritsaway::shape_drawer::Color split_color; // cellåˆ†å‰²çº¿çš„é¢œè‰²
+	std::uint16_t canvas_radius;  // å…¨å›¾åŠå¾„
 	
-	std::string font_name; // ×ÖÌåÃû×Ö
-	std::uint16_t font_size; // ×ÖÌå´óĞ¡
-	std::uint16_t real_point_radius; // real entityµÄ°ë¾¶
-	std::uint16_t ghost_point_radius; // Ã¿Ò»²ãghost»á¸øÕâ¸öentityÔö¼ÓµÄÒ»¸öÍâÎ§»·µÄ¶îÍâ°ë¾¶
-	std::uint16_t boundary_radius; // È«Í¼ÖÜ±ßÁô°×µÄ²¿·Ö
-	std::vector<spiritsaway::shape_drawer::Color> region_colors; // ËùÓĞregion¿ÉÒÔÊ¹ÓÃµÄÑÕÉ«
-	std::unordered_map<std::string, std::pair<std::string, std::string>> font_info; // ËùÓĞÏà¹Ø×ÖÌåĞÅÏ¢
-	std::uint16_t split_line_width; // ·Ö¸îÏßµÄ¿í¶È
-	bool with_entity_label; // ÊÇ·ñ»æÖÆentityµÄÃû×Ö
+	std::string font_name; // å­—ä½“åå­—
+	std::uint16_t font_size; // å­—ä½“å¤§å°
+	std::uint16_t real_point_radius; // real entityçš„åŠå¾„
+	std::uint16_t ghost_point_radius; // æ¯ä¸€å±‚ghostä¼šç»™è¿™ä¸ªentityå¢åŠ çš„ä¸€ä¸ªå¤–å›´ç¯çš„é¢å¤–åŠå¾„
+	std::uint16_t boundary_radius; // å…¨å›¾å‘¨è¾¹ç•™ç™½çš„éƒ¨åˆ†
+	std::vector<spiritsaway::shape_drawer::Color> region_colors; // æ‰€æœ‰regionå¯ä»¥ä½¿ç”¨çš„é¢œè‰²
+	std::unordered_map<std::string, std::pair<std::string, std::string>> font_info; // æ‰€æœ‰ç›¸å…³å­—ä½“ä¿¡æ¯
+	std::uint16_t split_line_width; // åˆ†å‰²çº¿çš„å®½åº¦
+	bool with_entity_label; // æ˜¯å¦ç»˜åˆ¶entityçš„åå­—
 
 	NLOHMANN_DEFINE_TYPE_INTRUSIVE(space_draw_config, real_region_color, ghost_region_color, point_color, split_color,  canvas_radius, font_name, font_size, real_point_radius, ghost_point_radius,  boundary_radius, region_colors, font_info);
 

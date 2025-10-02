@@ -112,7 +112,7 @@ void space_draw_container::calc_region_adjacent_matrix()
 	{
 		for (int j = i + 1; j < regions.size(); j++)
 		{
-			if (regions[i].intersect(regions[j], draw_config.ghost_radius * draw_scale))
+			if (regions[i].intersect(regions[j], ghost_radius * draw_scale))
 			{
 				region_adjacent_matrix[i][j] = 1;
 				region_adjacent_matrix[j][i] = 1;
@@ -243,7 +243,7 @@ void space_draw_container::draw_png(PngImage& out_png) const
 		cur_cell_space.font_name = draw_config.font_name;
 		cur_cell_space.font_sz = draw_config.font_size;
 		cur_cell_space.ghost_color = draw_config.ghost_region_color;
-		cur_cell_space.ghost_radius = draw_config.ghost_radius * draw_scale;
+		cur_cell_space.ghost_radius = ghost_radius * draw_scale;
 		cur_cell_space.real_color = draw_config.real_region_color;
 
 		cur_cell_space.max_xy = one_region.max_xy;
@@ -276,7 +276,7 @@ void space_draw_container::draw_svg(SvgGraph& out_svg) const
 		cur_cell_space.font_name = draw_config.font_name;
 		cur_cell_space.font_sz = draw_config.font_size;
 		cur_cell_space.ghost_color = draw_config.ghost_region_color;
-		cur_cell_space.ghost_radius = draw_config.ghost_radius * draw_scale;
+		cur_cell_space.ghost_radius = ghost_radius * draw_scale;
 		cur_cell_space.real_color = draw_config.real_region_color;
 		cur_cell_space.max_xy = one_region.max_xy;
 		cur_cell_space.min_xy = one_region.min_xy;
@@ -443,6 +443,7 @@ void draw_cell_region(const spiritsaway::utility::space_cells& cur_cell_region, 
 {
 	space_draw_container cur_cell_configuration;
 	cur_cell_configuration.draw_config = draw_config;
+	cur_cell_configuration.ghost_radius = cur_cell_region.ghost_radius();
 	for (const auto& [one_cell_id, one_cell_ptr] : cur_cell_region.all_cells())
 	{
 		if (one_cell_ptr->is_leaf())

@@ -1,4 +1,4 @@
-#include "cell_region.h"
+#include "space_cells.h"
 #include <random>
 #include <fstream>
 using namespace spiritsaway::utility;
@@ -98,7 +98,7 @@ void dump_json_to_file(const json& data, const std::string& path)
 	std::ofstream ofs(path);
 	ofs << data.dump();
 }
-// µ¥Ò»³¡¾° ÎÞentity
+// ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½entity
 void dump_case_1()
 {
 	cell_bound temp_bound;
@@ -113,7 +113,7 @@ void dump_case_1()
 	dump_json_to_file(cur_space_json, "case_1.json");
 }
 
-// µ¥Ò»³¡¾° ÓÐentity
+// ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½entity
 void dump_case_2()
 {
 	cell_bound temp_bound;
@@ -129,7 +129,7 @@ void dump_case_2()
 	dump_json_to_file(cur_space_json, "case_2.json");
 }
 
-// »®·ÖÒ»´Î ÎÞentity
+// ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ ï¿½ï¿½entity
 void dump_case_3()
 {
 	cell_bound temp_bound;
@@ -146,7 +146,7 @@ void dump_case_3()
 	dump_json_to_file(cur_space_json, "case_3.json");
 }
 
-// »®·ÖÒ»´Î ÓÐentity
+// ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ ï¿½ï¿½entity
 void dump_case_4()
 {
 	cell_bound temp_bound;
@@ -164,7 +164,7 @@ void dump_case_4()
 	dump_json_to_file(cur_space_json, "case_4.json");
 }
 
-// »®·ÖÈý´Î ÓÐentity
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½entity
 void dump_case_5()
 {
 	cell_bound temp_bound;
@@ -184,7 +184,7 @@ void dump_case_5()
 	dump_json_to_file(cur_space_json, "case_5.json");
 }
 
-// »®·ÖËÄ´Î ÓÐentity
+// ï¿½ï¿½ï¿½ï¿½ï¿½Ä´ï¿½ ï¿½ï¿½entity
 void dump_case_6()
 {
 	cell_bound temp_bound;
