@@ -29,3 +29,5 @@ FIND_PACKAGE(shape_drawer CONFIG REQUIRED)
 add_subdirectory(space_draw)
 
 add_subdirectory(dump_space)
+
+add_subdirectory(test_draw)

@@ -1,5 +1,7 @@
 #include "space_draw.h"
 
+#include "space_draw_container.h"
+
 #include <fstream>
 #include <streambuf>
 
@@ -25,63 +27,62 @@ namespace spiritsaway::shape_drawer
 
 	void to_json(json& j, const Color& p)
 	{
-		j = json{ { "r", p.r }, { "g", p.g }, {"b", p.b} };
+		j = json{ std::array<int, 3>{p.r, p.g, p.b } };
 	}
 
 	void from_json(const json& k, Color& p)
 	{
-		k.at("r").get_to(p.r);
-		k.at("g").get_to(p.g);
-		k.at("b").get_to(p.b);
+		std::array<int, 3> temp;
+		k.get_to(temp);
+		p.r = temp[0];
+		p.g = temp[1];
+		p.b = temp[2];
 	}
 }
+
+
 
 
 void label_in_circle::draw_png(PngImage& out_png) const
 {
 	Circle cur_circle(radius, center, color, 1, false, stroke_width);
 	out_png << cur_circle;
-	std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(u8_text);
-	Point line_begin_p = center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
-	Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
-	Line cur_text_line = Line(line_begin_p, line_end_p);
-	out_png.draw_text(cur_text_line, text, font_name, font_size, color, 1.0f);
+	if (!u8_text.empty())
+	{
+		std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(u8_text);
+		Point line_begin_p = center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
+		Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
+		Line cur_text_line = Line(line_begin_p, line_end_p);
+		out_png.draw_text(cur_text_line, text, font_name, font_size, color, 1.0f);
+	}
+	
 }
 
 void label_in_circle::draw_svg(SvgGraph& out_svg) const
 {
 	Circle cur_circle(radius, center, color, 1, false, stroke_width);
 	out_svg << cur_circle;
-	std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(u8_text);
-	Point line_begin_p = center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
-	Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
-	Line cur_text_line = Line(line_begin_p, line_end_p);
-	out_svg << LineText(cur_text_line, u8_text, font_name, font_size, color, 1.0f);
+	if (!u8_text.empty())
+	{
+		std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(u8_text);
+		Point line_begin_p = center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
+		Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
+		Line cur_text_line = Line(line_begin_p, line_end_p);
+		out_svg << LineText(cur_text_line, u8_text, font_name, font_size, color, 1.0f);
+	}
+	
 }
 
 
-
-
-
-
-bool cell_space::check_in_real_range(const Point& a) const
-{
-	return a.x >= min_xy.x && a.x <= max_xy.x && a.y >= min_xy.y && a.y <= max_xy.y;
-}
-
-bool cell_space::check_in_ghost_range(const Point& a) const
-{
-	return a.x >= (min_xy.x - ghost_radius) && a.x <= (max_xy.x + ghost_radius) && a.y >= (min_xy.y - ghost_radius) && a.y <= (max_xy.y + ghost_radius);
-}
 
 void cell_space::draw_png(PngImage& out_png) const
 {
 
-	shape_drawer::Rectangle ghost_rect(min_xy + offset - ghost_radius * Point(1, 1), max_xy - min_xy + ghost_radius * Point(2, 2), ghost_color, true, 0.4);
+	shape_drawer::Rectangle ghost_rect(min_xy  - ghost_radius * Point(1, 1), max_xy - min_xy + ghost_radius * Point(2, 2), ghost_color, true, 0.4);
 	ghost_rect.stroke_color = ghost_color;
 	out_png << ghost_rect;
 
-	shape_drawer::Rectangle real_rect(min_xy + offset, max_xy - min_xy, real_color, true, 0.4);
+	shape_drawer::Rectangle real_rect(min_xy, max_xy - min_xy, real_color, true, 0.4);
 	real_rect.stroke_color = real_color;
 	out_png << real_rect;
 
@@ -89,25 +90,18 @@ void cell_space::draw_png(PngImage& out_png) const
 
 void cell_space::draw_svg(SvgGraph& out_svg) const
 {
-	shape_drawer::Rectangle ghost_rect(min_xy + offset - ghost_radius * Point(1, 1), max_xy - min_xy + ghost_radius * Point(2, 2), ghost_color, true, 0.4);
+	shape_drawer::Rectangle ghost_rect(min_xy - ghost_radius * Point(1, 1), max_xy - min_xy + ghost_radius * Point(2, 2), ghost_color, true, 0.4);
 	ghost_rect.stroke_color = ghost_color;
 	out_svg << ghost_rect;
 
-	shape_drawer::Rectangle real_rect(min_xy + offset, max_xy - min_xy, real_color, true, 0.4);
+	shape_drawer::Rectangle real_rect(min_xy , max_xy - min_xy, real_color, true, 0.4);
 	real_rect.stroke_color = real_color;
 	out_svg << real_rect;
 
 }
 
 
-
-
-
-
-
-
-
-void cell_agents::calc_region_adjacent_matrix()
+void space_draw_container::calc_region_adjacent_matrix()
 {
 	region_adjacent_matrix.resize(regions.size());
 	for (int i = 0; i < regions.size(); i++)
@@ -118,7 +112,7 @@ void cell_agents::calc_region_adjacent_matrix()
 	{
 		for (int j = i + 1; j < regions.size(); j++)
 		{
-			if (regions[i].intersect(regions[j], draw_config.boundary_radius))
+			if (regions[i].intersect(regions[j], draw_config.ghost_radius * draw_scale))
 			{
 				region_adjacent_matrix[i][j] = 1;
 				region_adjacent_matrix[j][i] = 1;
@@ -127,7 +121,7 @@ void cell_agents::calc_region_adjacent_matrix()
 	}
 
 }
-bool cell_agents::check_region_color_match(int target) const
+bool space_draw_container::check_region_color_match(int target) const
 {
 	for (int i = 0; i < target; i++)
 	{
@@ -138,7 +132,7 @@ bool cell_agents::check_region_color_match(int target) const
 	}
 	return true;
 }
-bool cell_agents::calc_region_colors_recursive(int i)
+bool space_draw_container::calc_region_colors_recursive(int i)
 {
 
 	for (int j = 0; j < draw_config.region_colors.size(); j++)
@@ -159,7 +153,7 @@ bool cell_agents::calc_region_colors_recursive(int i)
 	}
 	return false;
 }
-bool cell_agents::calc_region_colors()
+bool space_draw_container::calc_region_colors()
 {
 	for (int i = 0; i < regions.size(); i++)
 	{
@@ -169,7 +163,7 @@ bool cell_agents::calc_region_colors()
 }
 
 
-void cell_agents::calc_agents()
+void space_draw_container::calc_agents()
 {
 	for (const auto& one_region : regions)
 	{
@@ -198,35 +192,47 @@ void cell_agents::calc_agents()
 		
 	}
 }
-Point cell_agents::calc_canvas()
+void space_draw_container::calc_canvas()
 {
 	cell_region_config cur_aabb_region = regions[0];
 	for (const auto& one_region : regions)
 	{
 		cur_aabb_region = cur_aabb_region.calc_union(one_region);
 	}
+	region_min_xy = cur_aabb_region.min_xy;
+
 	cell_region_config full_region;
 
 	Point full_region_sz = cur_aabb_region.max_xy - cur_aabb_region.min_xy;
-	full_region.max_xy = full_region_sz;
-	full_region.min_xy.x = 0;
-	full_region.min_xy.y = 0;
-
-	full_region.min_xy -= draw_config.boundary_radius * Point(1, 1);
-	full_region.max_xy += draw_config.boundary_radius * Point(1, 1);
-	space_min_xy_offset = -1 * full_region.min_xy;
-
-	space_origin_offset = space_min_xy_offset - cur_aabb_region.min_xy;
-	return full_region.max_xy - full_region.min_xy;
+	draw_scale = 2 * (draw_config.canvas_radius * 1.0  - draw_config.boundary_radius)/ ((std::max(full_region_sz.x, full_region_sz.y)));
+	
+	for (auto& one_region : regions)
+	{
+		one_region.max_xy = convert_pos_to_canvas(one_region.max_xy);
+		one_region.min_xy = convert_pos_to_canvas(one_region.min_xy);
+		for (auto& one_point : one_region.points)
+		{
+			one_point.pos = convert_pos_to_canvas(one_point.pos);
+		}
+	}
+	for (auto& one_line : split_lines)
+	{
+		one_line.from = convert_pos_to_canvas(one_line.from);
+		one_line.to = convert_pos_to_canvas(one_line.to);
+	}
 }
 
-void cell_agents::draw_png(PngImage& out_png) const
+Point space_draw_container::convert_pos_to_canvas(const Point& origin_pos) const
+{
+	Point result(draw_config.boundary_radius, draw_config.boundary_radius);
+	result += (origin_pos - region_min_xy) * draw_scale;
+	return result;
+}
+
+void space_draw_container::draw_png(PngImage& out_png) const
 {
 	for (auto one_region : regions)
 	{
-
-		one_region.min_xy += space_origin_offset;
-		one_region.max_xy += space_origin_offset;
 		shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, draw_config.region_colors[one_region.color_idx], false);
 		cur_rect.stroke_color = draw_config.region_colors[one_region.color_idx];
 		out_png << cur_rect;
@@ -237,24 +243,27 @@ void cell_agents::draw_png(PngImage& out_png) const
 		cur_cell_space.font_name = draw_config.font_name;
 		cur_cell_space.font_sz = draw_config.font_size;
 		cur_cell_space.ghost_color = draw_config.ghost_region_color;
-		cur_cell_space.ghost_radius = draw_config.ghost_radius;
+		cur_cell_space.ghost_radius = draw_config.ghost_radius * draw_scale;
 		cur_cell_space.real_color = draw_config.real_region_color;
 
-		cur_cell_space.offset = space_min_xy_offset;
 		cur_cell_space.max_xy = one_region.max_xy;
 		cur_cell_space.min_xy = one_region.min_xy;
 		cur_cell_space.draw_png(out_png);
 	}
-
+	for (const auto& one_split_line : split_lines)
+	{
+		out_png << one_split_line;
+	}
+	for (const auto& [one_agent_label, one_agent_info] : agents)
+	{
+		one_agent_info.draw_png(out_png, draw_config.with_entity_label);
+	}
 }
 
-void cell_agents::draw_svg(SvgGraph& out_svg) const
+void space_draw_container::draw_svg(SvgGraph& out_svg) const
 {
 	for (auto one_region : regions)
 	{
-
-		one_region.min_xy += space_origin_offset;
-		one_region.max_xy += space_origin_offset;
 		shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, draw_config.region_colors[one_region.color_idx], false, 1.0);
 		cur_rect.stroke_color = draw_config.region_colors[one_region.color_idx];
 
@@ -267,23 +276,36 @@ void cell_agents::draw_svg(SvgGraph& out_svg) const
 		cur_cell_space.font_name = draw_config.font_name;
 		cur_cell_space.font_sz = draw_config.font_size;
 		cur_cell_space.ghost_color = draw_config.ghost_region_color;
-		cur_cell_space.ghost_radius = draw_config.ghost_radius;
+		cur_cell_space.ghost_radius = draw_config.ghost_radius * draw_scale;
 		cur_cell_space.real_color = draw_config.real_region_color;
-		cur_cell_space.offset = space_min_xy_offset;
 		cur_cell_space.max_xy = one_region.max_xy;
 		cur_cell_space.min_xy = one_region.min_xy;
 		cur_cell_space.draw_svg(out_svg);
 	}
+
+	for (const auto& one_split_line : split_lines)
+	{
+		out_svg << one_split_line;
+	}
+
+	for (const auto& [one_agent_label, one_agent_info] : agents)
+	{
+		one_agent_info.draw_svg(out_svg, draw_config.with_entity_label);
+	}
 }
 
-void agent_info::draw_png(spiritsaway::shape_drawer::PngImage& out_png) const
+void agent_info::draw_png(spiritsaway::shape_drawer::PngImage& out_png, bool with_label) const
 {
-	std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(name);
-	auto text_center = pos + Point(0, radius);
-	Point line_begin_p = text_center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
-	Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
-	Line cur_text_line = Line(line_begin_p, line_end_p);
-	out_png << LineText(cur_text_line, name, font_name, font_size, color, 1.0f);
+	if (with_label)
+	{
+		std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(name);
+		auto text_center = pos + Point(0, radius);
+		Point line_begin_p = text_center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
+		Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
+		Line cur_text_line = Line(line_begin_p, line_end_p);
+		out_png << LineText(cur_text_line, name, font_name, font_size, color, 1.0f);
+	}
+	
 	spiritsaway::shape_drawer::Circle outline_circle(radius, pos, color, 1, true, 0);
 	out_png << outline_circle;
 	switch (region_colors.size())
@@ -338,14 +360,18 @@ void agent_info::draw_png(spiritsaway::shape_drawer::PngImage& out_png) const
 }
 
 
-void agent_info::draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) const
+void agent_info::draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg, bool with_label) const
 {
-	std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(name);
-	auto text_center = pos + Point(0, radius);
-	Point line_begin_p = text_center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
-	Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
-	Line cur_text_line = Line(line_begin_p, line_end_p);
-	out_svg << LineText(cur_text_line, name, font_name, font_size, color, 1.0f);
+	if (with_label)
+	{
+		std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(name);
+		auto text_center = pos + Point(0, radius);
+		Point line_begin_p = text_center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
+		Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
+		Line cur_text_line = Line(line_begin_p, line_end_p);
+		out_svg << LineText(cur_text_line, name, font_name, font_size, color, 1.0f);
+	}
+	
 
 	spiritsaway::shape_drawer::Circle outline_circle(radius, pos, color, 1, true, 0);
 	out_svg << outline_circle;
@@ -413,19 +439,19 @@ json load_json_file(const std::string& file_path)
 }
 
 
-void draw_cell_region(const spiritsaway::utility::cell_region& cur_cell_region, const space_draw_config& draw_config)
+void draw_cell_region(const spiritsaway::utility::space_cells& cur_cell_region, const space_draw_config& draw_config, const std::string& folder_path, const std::string& file_name_prefix)
 {
-	cell_agents cur_cell_configuration;
+	space_draw_container cur_cell_configuration;
 	cur_cell_configuration.draw_config = draw_config;
 	for (const auto& [one_cell_id, one_cell_ptr] : cur_cell_region.all_cells())
 	{
 		if (one_cell_ptr->is_leaf())
 		{
 			cell_region_config new_leaf_config;
-			new_leaf_config.min_xy.x = one_cell_ptr->boundary().left_x;
-			new_leaf_config.min_xy.y = one_cell_ptr->boundary().low_z;
-			new_leaf_config.max_xy.x = one_cell_ptr->boundary().right_x;
-			new_leaf_config.max_xy.y = one_cell_ptr->boundary().high_z;
+			new_leaf_config.min_xy.x = one_cell_ptr->boundary().min.x;
+			new_leaf_config.min_xy.y = one_cell_ptr->boundary().min.z;
+			new_leaf_config.max_xy.x = one_cell_ptr->boundary().max.x;
+			new_leaf_config.max_xy.y = one_cell_ptr->boundary().max.z;
 			new_leaf_config.name = one_cell_ptr->game_id() + "::" + one_cell_ptr->space_id();
 			new_leaf_config.points.reserve(one_cell_ptr->get_entity_loads().size());
 			for (const auto& one_entity : one_cell_ptr->get_entity_loads())
@@ -445,20 +471,31 @@ void draw_cell_region(const spiritsaway::utility::cell_region& cur_cell_region, 
 			spiritsaway::shape_drawer::Line temp_split_line;
 			if (one_cell_ptr->is_split_x())
 			{
-				temp_split_line.from.x = cur_child_aabb.right_x;
-				temp_split_line.to.x = cur_child_aabb.right_x;
-				temp_split_line.from.y = cur_child_aabb.low_z;
-				temp_split_line.to.y = cur_child_aabb.high_z;
+				temp_split_line.from.x = (int)cur_child_aabb.max.x;
+				temp_split_line.to.x = (int)cur_child_aabb.max.x;
+				temp_split_line.from.y = (int)cur_child_aabb.min.z;
+				temp_split_line.to.y = (int)cur_child_aabb.max.z;
 
 			}
 			else
 			{
-				temp_split_line.from.y = cur_child_aabb.high_z;
-				temp_split_line.to.y = cur_child_aabb.high_z;
-				temp_split_line.from.x = cur_child_aabb.left_x;
-				temp_split_line.to.x = cur_child_aabb.right_x;
+				temp_split_line.from.y = (int)cur_child_aabb.max.z;
+				temp_split_line.to.y = (int)cur_child_aabb.max.z;
+				temp_split_line.from.x = (int)cur_child_aabb.min.x;
+				temp_split_line.to.x = (int)cur_child_aabb.max.x;
 			}
+			temp_split_line.width = draw_config.split_line_width;
+			temp_split_line.color = draw_config.split_color;
 			cur_cell_configuration.split_lines.push_back(temp_split_line);
 		}
 	}
+	cur_cell_configuration.calc_canvas();
+	cur_cell_configuration.calc_region_adjacent_matrix();
+	cur_cell_configuration.calc_region_colors();
+	cur_cell_configuration.calc_agents();
+	auto cur_png = PngImage(draw_config.font_info, folder_path + "/" + file_name_prefix + ".png", draw_config.canvas_radius, Color(255, 255, 255));
+	auto cur_svg = SvgGraph(draw_config.font_info, folder_path + "/" + file_name_prefix + ".svg", draw_config.canvas_radius, Color(255, 255, 255));
+
+	cur_cell_configuration.draw_png(cur_png);
+	cur_cell_configuration.draw_svg(cur_svg);
 }

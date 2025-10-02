@@ -7,41 +7,61 @@
 using json = nlohmann::json;
 namespace spiritsaway::utility
 {
-
+	struct point_xz
+	{
+		union
+		{
+			struct {
+				double x;
+				double z;
+			};
+			double val[2];
+		};
+		
+		double& operator[](int index)
+		{
+			return val[index];
+		}
+		double operator[](int index) const
+		{
+			return val[index];
+		}
+		NLOHMANN_DEFINE_TYPE_INTRUSIVE(point_xz, x, z)
+	};
 	struct entity_load
 	{
-		std::array<double, 2> pos; // (x,z)
-		double load;
+		point_xz pos; // (x,z)
+		float load;
 		bool is_real;
 		std::string name;
 		NLOHMANN_DEFINE_TYPE_INTRUSIVE(entity_load, pos, load, name, is_real)
 	};
 
-	class cell_region
+
+	struct cell_bound
+	{
+		point_xz min;
+		point_xz max;
+		NLOHMANN_DEFINE_TYPE_INTRUSIVE(cell_bound, min, max);
+
+		bool cover(const double x, const double z) const
+		{
+			if (min.x > x || max.x < x)
+			{
+				return false;
+			}
+			if (min.z > z || max.z < z)
+			{
+				return false;
+			}
+			return true;
+		}
+		bool intersect(const cell_bound& other) const;
+	};
+	class space_cells
 	{
 	public:
-		struct cell_bound
-		{
-			double left_x;
-			double low_z;
-			double right_x;
-			double high_z;
-			NLOHMANN_DEFINE_TYPE_INTRUSIVE(cell_bound, left_x, low_z, right_x, high_z)
-
-			bool cover(const double x, const double z) const
-			{
-				if(left_x > x || right_x < x)
-				{
-					return false;
-				}
-				if(low_z > z || high_z < z)
-				{
-					return false;
-				}
-				return true;
-			}
-			bool intersect(const cell_bound& other) const;
-		};
+		
 	public:
 		class cell_node
 		{
@@ -53,7 +73,7 @@ namespace spiritsaway::utility
 			cell_node* m_parent = nullptr;
 			bool m_ready = false;
 			bool m_is_split_x = false;
-			std::array<double, 4> m_cell_loads;
+			std::array<float, 4> m_cell_loads;
 			std::vector<entity_load> m_entity_loads;
 			std::uint32_t m_cell_load_counter = 0;
 			
@@ -65,7 +85,7 @@ namespace spiritsaway::utility
 			, m_children{nullptr, nullptr}
 			, m_parent(in_parent)
 			{
-
+				std::fill(m_cell_loads.begin(), m_cell_loads.end(), 0);
 			}
 			cell_node* split_x(double x, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id, const std::string& new_parent_space_id);
 			cell_node* split_z(double z, const std::string& new_space_game_id, const std::string& low_space_id, const std::string& up_space_id, const std::string& new_parent_space_id);
@@ -114,17 +134,22 @@ namespace spiritsaway::utility
 			std::pair<std::string, std::string> merge_to_child(const std::string& dest, const std::string& master_cell_id);
 
 			json encode() const;
-			double get_smoothed_load() const;
-			void add_load(double cur_load, const std::vector<entity_load>& new_entity_loads);
+			float get_smoothed_load() const;
+			std::uint32_t cell_load_counter() const
+			{
+				return m_cell_load_counter;
+			}
+			void update_load(float cur_load, const std::vector<entity_load>& new_entity_loads);
 			// 计算如果需要减少load_to_offset的负载，应该切分的位置
-			bool calc_offset_axis(double load_to_offset, double& out_split_axis, double& offseted_load) const;
+			bool calc_offset_axis(float load_to_offset, double& out_split_axis, float& offseted_load) const;
 		private:
 			bool set_child(int index, cell_node* new_child);
 			void set_ready();
 			void on_split(int master_child_index);
-			friend class cell_region;
+			friend class space_cells;
 			
 		};
+	private:
 		std::unordered_map<std::string, cell_node*> m_cells;
 		cell_node* m_root_cell;
 		std::uint64_t m_temp_node_counter = 0;
@@ -132,9 +157,10 @@ namespace spiritsaway::utility
 		// space的主体逻辑由master cell控制
 		// 第一个创建的cell就是master_cell
 		std::string m_master_cell_id;
+		double m_ghost_radius;
 	public:
 		
-		cell_region(const cell_bound& bound, const std::string& game_id, const std::string& space_id);
+		space_cells(const cell_bound& bound, const std::string& game_id, const std::string& space_id, const double in_ghost_radius);
 		const cell_node* split_x(double x, const std::string& origin_space_id, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id);
 		const cell_node* split_z(double z, const std::string& origin_space_id, const std::string& new_space_game_id,const std::string& low_space_id, const std::string& high_space_id);
 		bool balance(bool is_x, double split_v, const std::string& cell_id);
@@ -165,16 +191,42 @@ namespace spiritsaway::utility
 		{
 			return m_cells;
 		}
+		auto ghost_radius() const
+		{
+			return m_ghost_radius;
+		}
 		bool set_ready(const std::string& space_id);
 		json encode() const;
 		bool decode(const json& data);
+		// 传入的cell id不能是数字
 		bool check_valid_space_id(const std::string& cell_id) const;
 		std::vector<std::string> all_child_space_except(const std::string& except_space) const;
 		const std::string& master_cell_id() const
 		{
 			return m_master_cell_id;
 		}
-		void add_load(const std::string& cell_space_id, double cell_load, const std::vector<entity_load>& new_entity_loads);
-		~cell_region();
+		void update_cell_load(const std::string& cell_space_id, float cell_load, const std::vector<entity_load>& new_entity_loads);
+
+		// 选择一个合适的cell来分割 分割要求
+		// 1. 这个cell所在的game load 要大于指定阈值
+		// 2. 这个cell的load要大于指定阈值
+		// 3. 选取cell load最大的
+		// 4. 避免选取刚刚创建的cell
+		const cell_node* get_best_cell_to_split(const std::unordered_map<std::string, float>& game_loads, const float min_game_load, const float min_cell_load) const;
+		~space_cells();
+
+		// 选择一个合适的cell来删除 删除要求
+		// 1. 这个cell的负载要小于指定阈值 max_cell_load
+		// 2. 这个cell的兄弟节点的game负载要比此cell的game负载低起码min_sibling_game_load_diff
+		// 3. 选取其中 cell load最小的
+		// 4. 避免选取刚刚创建的cell
+		const cell_node* get_best_cell_to_remove(const std::unordered_map<std::string, float>& game_loads, const float min_sibling_game_load_diff, const float max_cell_load);
+
+		// 选择一个合适的cell来缩小边界 缩容要求
+		// 1. 这个cell的负载要比其兄弟负载高起码 min_cell_load_diff
+		// 2. 这个cell的兄弟节点的game负载要比此cell的game负载高起码min_sibling_game_load_diff
+		// 3. 选取其中 cell load最大的
+		// 4. 避免选取刚刚创建的cell 或者其兄弟节点刚刚创建
+		const cell_node* get_best_cell_to_shrink(const std::unordered_map<std::string, float>& game_loads, const float min_sibling_game_load_diff, const float min_cell_load_diff);
 	};
 }

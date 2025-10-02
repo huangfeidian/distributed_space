@@ -1,0 +1,26 @@
+{
+	"real_region_color": [0,255,255],
+	"ghost_region_color": [100,149,237],
+	"point_color": [34,139,34],
+	"split_color": [178,34,34],
+	"canvas_radius": 900,
+	"font_name": "yahei",
+	"font_size": 8,
+	"real_point_radius": 4,
+	"ghost_point_radius": 2,
+	"boundary_radius": 50,
+	"region_colors": [
+		[52,152,219],
+		[119,52,219],
+		[219,52,152],
+		[219,119,52],
+		[152,219,52],
+		[52,219,119]
+	],
+	"font_info": {
+		"yahei": ["C:/Windows/Fonts/msyhl.ttc", "microsoft yahei"]
+	},
+	"split_line_width": 4,
+	"with_entity_label": false
+}
+
