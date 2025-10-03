@@ -28,6 +28,32 @@ namespace spiritsaway::utility
 		}
 		NLOHMANN_DEFINE_TYPE_INTRUSIVE(point_xz, x, z)
 	};
+
+	enum class cell_load_balance_operation
+	{
+		nothing,
+		remove,
+		split,
+		shrink,
+	};
+
+	// 负载均衡相关参数
+	// 一般来说 shrink的report_counter周期最小
+	// split的周期要比shrink大一倍
+	// remove的周期要比split大一倍
+	// 执行负载均衡时 优先执行split操作 因为这样平摊负载最快，
+	// 然后是 shrink操作 最后的remove操作相当于gc
+	struct cell_load_balance_param
+	{
+		float max_cell_load_when_remove; // 在考虑remove时 一个cell的最大负载
+		int min_cell_load_report_counter_when_remove; // 在考虑remove时 一个cell的最小负载汇报次数
+
+		float min_cell_load_when_shrink; // 在shrink时 当前cell的load 的最小阈值
+		int min_cell_load_report_counter_when_shrink; // 在考虑shrink时 一个cell的最小负载汇报次数
+		float min_game_load_when_split; // 在split时 当前cell所在game的最小负载
+		float min_cell_load_when_split; // 在split时 当前cell的最小load
+		int min_cell_load_report_counter_when_split; // 在考虑split时 一个cell的最小负载汇报次数
+	};
 	struct entity_load
 	{
 		point_xz pos; // (x,z)
@@ -75,7 +101,7 @@ namespace spiritsaway::utility
 			bool m_is_split_x = false;
 			std::array<float, 4> m_cell_loads;
 			std::vector<entity_load> m_entity_loads;
-			std::uint32_t m_cell_load_counter = 0;
+			std::uint32_t m_cell_load_report_counter = 0; // 汇报负载的次数 每次boundary改变之后都要重置为0
 			
 		public:
 			cell_node(const cell_bound& in_bound, const std::string& in_game_id, const std::string& in_space_id, cell_node* in_parent)
@@ -130,18 +156,19 @@ namespace spiritsaway::utility
 			{
 				return m_parent;
 			}
-			bool can_merge_to_child(const std::string& dest, const std::string& master_cell_id) const;
-			std::pair<std::string, std::string> merge_to_child(const std::string& dest, const std::string& master_cell_id);
+			// 当前节点的两个子节点合并 结果里first为game_id second为space_id
+			std::pair<std::string, std::string> merge_to_child(const std::string& dest);
 
 			json encode() const;
 			float get_smoothed_load() const;
-			std::uint32_t cell_load_counter() const
+			std::uint32_t cell_load_report_counter() const
 			{
-				return m_cell_load_counter;
+				return m_cell_load_report_counter;
 			}
 			void update_load(float cur_load, const std::vector<entity_load>& new_entity_loads);
 			// 计算如果需要减少load_to_offset的负载，应该切分的位置
 			bool calc_offset_axis(float load_to_offset, double& out_split_axis, float& offseted_load) const;
+
 		private:
 			bool set_child(int index, cell_node* new_child);
 			void set_ready();
@@ -156,14 +183,37 @@ namespace spiritsaway::utility
 		// master 代表主逻辑cell 这个cell的生命周期伴随着整个space的生命周期
 		// space的主体逻辑由master cell控制
 		// 第一个创建的cell就是master_cell
+		// 这个cell无法被合并到其他节点 同时也无法被负载均衡删除
 		std::string m_master_cell_id;
 		double m_ghost_radius;
+
+	public:
+		// 选择一个合适的cell来分割 分割要求
+		// 1. 这个cell所在的game load 要大于指定阈值
+		// 2. 这个cell的load要大于指定阈值
+		// 3. 选取cell load最大的
+		const cell_node* get_best_cell_to_split(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param) const;
+		~space_cells();
+
+		// 选择一个合适的cell来删除 删除要求
+		// 1. 这个cell的负载要小于指定阈值 max_cell_load
+		// 2. 选取其中 cell load最小的
+		const cell_node* get_best_cell_to_remove(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
+
+		// 选择一个合适的cell来缩小边界 缩容要求
+		// 1. 这个cell的负载起码要大于指定阈值
+		// 2. 这个cell的负载转移到兄弟节点之后 兄弟节点game的load 不能比当前game的load高
+		// 3. 选取其中 cell load最大的
+		const cell_node* get_best_cell_to_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
 	public:
 		
 		space_cells(const cell_bound& bound, const std::string& game_id, const std::string& space_id, const double in_ghost_radius);
 		const cell_node* split_x(double x, const std::string& origin_space_id, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id);
 		const cell_node* split_z(double z, const std::string& origin_space_id, const std::string& new_space_game_id,const std::string& low_space_id, const std::string& high_space_id);
 		bool balance(bool is_x, double split_v, const std::string& cell_id);
+		// 将space_id对应节点的兄弟节点合并到space_id对应节点
+		// 返回的pair 第一个是对应要删除node的game_id 第二个是要删除node的space_id
+		// 失败的情况下两个值都是空
 		std::pair<std::string, std::string> merge_to(const std::string& space_id);
 		std::vector<const cell_node*> query_intersect(const cell_bound& bound) const;
 		const cell_node* query_point_region(double x, double z) const;
@@ -207,26 +257,5 @@ namespace spiritsaway::utility
 		}
 		void update_cell_load(const std::string& cell_space_id, float cell_load, const std::vector<entity_load>& new_entity_loads);
 
-		// 选择一个合适的cell来分割 分割要求
-		// 1. 这个cell所在的game load 要大于指定阈值
-		// 2. 这个cell的load要大于指定阈值
-		// 3. 选取cell load最大的
-		// 4. 避免选取刚刚创建的cell
-		const cell_node* get_best_cell_to_split(const std::unordered_map<std::string, float>& game_loads, const float min_game_load, const float min_cell_load) const;
-		~space_cells();
-
-		// 选择一个合适的cell来删除 删除要求
-		// 1. 这个cell的负载要小于指定阈值 max_cell_load
-		// 2. 这个cell的兄弟节点的game负载要比此cell的game负载低起码min_sibling_game_load_diff
-		// 3. 选取其中 cell load最小的
-		// 4. 避免选取刚刚创建的cell
-		const cell_node* get_best_cell_to_remove(const std::unordered_map<std::string, float>& game_loads, const float min_sibling_game_load_diff, const float max_cell_load);
-
-		// 选择一个合适的cell来缩小边界 缩容要求
-		// 1. 这个cell的负载要比其兄弟负载高起码 min_cell_load_diff
-		// 2. 这个cell的兄弟节点的game负载要比此cell的game负载高起码min_sibling_game_load_diff
-		// 3. 选取其中 cell load最大的
-		// 4. 避免选取刚刚创建的cell 或者其兄弟节点刚刚创建
-		const cell_node* get_best_cell_to_shrink(const std::unordered_map<std::string, float>& game_loads, const float min_sibling_game_load_diff, const float min_cell_load_diff);
 	};
 }
