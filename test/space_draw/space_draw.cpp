@@ -73,6 +73,30 @@ void label_in_circle::draw_svg(SvgGraph& out_svg) const
 	
 }
 
+void text_with_center::draw_png(spiritsaway::shape_drawer::PngImage& out_png) const
+{
+	if (!u8_text.empty())
+	{
+		std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(u8_text);
+		Point line_begin_p = center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
+		Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
+		Line cur_text_line = Line(line_begin_p, line_end_p);
+		out_png.draw_text(cur_text_line, text, font_name, font_size, color, 1.0f);
+	}
+}
+
+void text_with_center::draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) const
+{
+	if (!u8_text.empty())
+	{
+		std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(u8_text);
+		Point line_begin_p = center - text.size() * 0.25 * font_size * Point(1, 0) + 0.25 * font_size * Point(0, 1);
+		Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
+		Line cur_text_line = Line(line_begin_p, line_end_p);
+		out_svg << LineText(cur_text_line, u8_text, font_name, font_size, color, 1.0f);
+	}
+}
+
 
 
 void cell_space::draw_png(PngImage& out_png) const
@@ -86,6 +110,8 @@ void cell_space::draw_png(PngImage& out_png) const
 	real_rect.stroke_color = real_color;
 	out_png << real_rect;
 
+	label_info.draw_png(out_png);
+
 }
 
 void cell_space::draw_svg(SvgGraph& out_svg) const
@@ -98,6 +124,7 @@ void cell_space::draw_svg(SvgGraph& out_svg) const
 	real_rect.stroke_color = real_color;
 	out_svg << real_rect;
 
+	label_info.draw_svg(out_svg);
 }
 
 
@@ -142,7 +169,7 @@ bool space_draw_container::calc_region_colors_recursive(int i)
 		{
 			continue;
 		}
-		if (i == regions.size())
+		if (i + 1 == regions.size())
 		{
 			return true;
 		}
@@ -231,20 +258,23 @@ Point space_draw_container::convert_pos_to_canvas(const Point& origin_pos) const
 
 void space_draw_container::draw_png(PngImage& out_png) const
 {
-	for (auto one_region : regions)
-	{
-		shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, draw_config.region_colors[one_region.color_idx], false);
-		cur_rect.stroke_color = draw_config.region_colors[one_region.color_idx];
-		out_png << cur_rect;
-	}
+	//for (auto one_region : regions)
+	//{
+	//	shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, draw_config.region_colors[one_region.color_idx], false);
+	//	cur_rect.stroke_color = draw_config.region_colors[one_region.color_idx];
+	//	out_png << cur_rect;
+	//}
 	for (const auto& one_region : regions)
 	{
 		cell_space cur_cell_space;
-		cur_cell_space.font_name = draw_config.font_name;
-		cur_cell_space.font_sz = draw_config.font_size;
+		cur_cell_space.label_info.font_name = draw_config.font_name;
+		cur_cell_space.label_info.font_size = draw_config.font_size;
+		cur_cell_space.label_info.u8_text = one_region.name;
+		cur_cell_space.label_info.color = draw_config.region_label_color;
+		cur_cell_space.label_info.center = (one_region.max_xy + one_region.min_xy) / 2;
 		cur_cell_space.ghost_color = draw_config.ghost_region_color;
 		cur_cell_space.ghost_radius = ghost_radius * draw_scale;
-		cur_cell_space.real_color = draw_config.real_region_color;
+		cur_cell_space.real_color = draw_config.region_colors[one_region.color_idx];
 
 		cur_cell_space.max_xy = one_region.max_xy;
 		cur_cell_space.min_xy = one_region.min_xy;
@@ -262,22 +292,25 @@ void space_draw_container::draw_png(PngImage& out_png) const
 
 void space_draw_container::draw_svg(SvgGraph& out_svg) const
 {
-	for (auto one_region : regions)
-	{
-		shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, draw_config.region_colors[one_region.color_idx], false, 1.0);
-		cur_rect.stroke_color = draw_config.region_colors[one_region.color_idx];
+	//for (auto one_region : regions)
+	//{
+	//	shape_drawer::Rectangle cur_rect(one_region.min_xy, one_region.max_xy - one_region.min_xy, draw_config.region_colors[one_region.color_idx], false, 1.0);
+	//	cur_rect.stroke_color = draw_config.region_colors[one_region.color_idx];
 
-		out_svg << cur_rect;
-	}
+	//	out_svg << cur_rect;
+	//}
 
 	for (const auto& one_region : regions)
 	{
 		cell_space cur_cell_space;
-		cur_cell_space.font_name = draw_config.font_name;
-		cur_cell_space.font_sz = draw_config.font_size;
+		cur_cell_space.label_info.font_name = draw_config.font_name;
+		cur_cell_space.label_info.font_size = draw_config.font_size;
+		cur_cell_space.label_info.u8_text = one_region.name;
+		cur_cell_space.label_info.color = draw_config.region_label_color;
+		cur_cell_space.label_info.center = (one_region.max_xy + one_region.min_xy) / 2;
 		cur_cell_space.ghost_color = draw_config.ghost_region_color;
 		cur_cell_space.ghost_radius = ghost_radius * draw_scale;
-		cur_cell_space.real_color = draw_config.real_region_color;
+		cur_cell_space.real_color = draw_config.region_colors[one_region.color_idx];
 		cur_cell_space.max_xy = one_region.max_xy;
 		cur_cell_space.min_xy = one_region.min_xy;
 		cur_cell_space.draw_svg(out_svg);
@@ -321,7 +354,7 @@ void agent_info::draw_png(spiritsaway::shape_drawer::PngImage& out_png, bool wit
 		auto rect_half_extent = 1.0 / std::sqrt(5);
 		spiritsaway::shape_drawer::Rectangle rect1(pos - Point(2* rect_half_extent*radius, rect_half_extent* radius), Point(2*rect_half_extent*radius, 2*rect_half_extent*radius), region_colors[0], true);
 		out_png << rect1;
-		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(-2 * rect_half_extent * radius, rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
+		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(0, rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
 		out_png << rect2;
 	}
 		break;
@@ -332,7 +365,7 @@ void agent_info::draw_png(spiritsaway::shape_drawer::PngImage& out_png, bool wit
 		out_png << rect1;
 		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(0, 2* rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
 		out_png << rect2;
-		spiritsaway::shape_drawer::Rectangle rect3(pos - Point(-1 * rect_half_extent * radius, 0), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[2], true);
+		spiritsaway::shape_drawer::Rectangle rect3(pos - Point(-1 * rect_half_extent * radius, -1 * rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[2], true);
 		out_png << rect3;
 
 	}
@@ -388,7 +421,7 @@ void agent_info::draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg, bool wit
 		auto rect_half_extent = 1.0 / std::sqrt(5);
 		spiritsaway::shape_drawer::Rectangle rect1(pos - Point(2 * rect_half_extent * radius, rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[0], true);
 		out_svg << rect1;
-		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(-2 * rect_half_extent * radius, rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
+		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(0, rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
 		out_svg << rect2;
 	}
 	break;

@@ -32,6 +32,7 @@ struct space_draw_config
 	spiritsaway::shape_drawer::Color ghost_region_color; // ghost 区域的颜色
 	spiritsaway::shape_drawer::Color point_color; // entity的边框与文字颜色
 	spiritsaway::shape_drawer::Color split_color; // cell分割线的颜色
+	spiritsaway::shape_drawer::Color region_label_color; // 区域名字的颜色
 	std::uint16_t canvas_radius;  // 全图半径
 	
 	std::string font_name; // 字体名字
@@ -44,7 +45,7 @@ struct space_draw_config
 	std::uint16_t split_line_width; // 分割线的宽度
 	bool with_entity_label; // 是否绘制entity的名字
 
-	NLOHMANN_DEFINE_TYPE_INTRUSIVE(space_draw_config, real_region_color, ghost_region_color, point_color, split_color,  canvas_radius, font_name, font_size, real_point_radius, ghost_point_radius,  boundary_radius, region_colors, font_info);
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(space_draw_config, real_region_color, ghost_region_color, point_color, split_color,  canvas_radius, font_name, font_size, real_point_radius, ghost_point_radius,  boundary_radius, region_colors, font_info, region_label_color, with_entity_label, split_line_width);
 
 };
 

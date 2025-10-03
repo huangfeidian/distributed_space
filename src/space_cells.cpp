@@ -372,7 +372,7 @@ namespace spiritsaway::utility
 		
 	}
 
-	const space_cells::cell_node* space_cells::split_z(double z, const std::string& new_space_game_id, const std::string& origin_space_id, const std::string& low_space_id, const std::string& high_space_id)
+	const space_cells::cell_node* space_cells::split_z(double z, const std::string& origin_space_id, const std::string& new_space_game_id,  const std::string& low_space_id, const std::string& high_space_id)
 	{
 		if(!check_valid_space_id(low_space_id) || ! check_valid_space_id(high_space_id))
 		{
@@ -541,7 +541,7 @@ namespace spiritsaway::utility
 				}
 				
 				auto new_node = new cell_node(temp_bound, temp_game_id, temp_space_id, parent_node);
-				if (children_ids.empty())
+				if (children_ids[0].empty())
 				{
 					one_node.at("cell_loads").get_to(new_node->m_cell_loads);
 					one_node.at("entity_loads").get_to(new_node->m_entity_loads);

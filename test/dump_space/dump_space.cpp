@@ -98,7 +98,7 @@ void dump_json_to_file(const json& data, const std::string& path)
 	std::ofstream ofs(path);
 	ofs << data.dump();
 }
-// ��һ���� ��entity
+// 单一space 无entity
 void dump_case_1()
 {
 	cell_bound temp_bound;
@@ -113,7 +113,7 @@ void dump_case_1()
 	dump_json_to_file(cur_space_json, "case_1.json");
 }
 
-// ��һ���� ��entity
+// 单space 有entity
 void dump_case_2()
 {
 	cell_bound temp_bound;
@@ -129,7 +129,7 @@ void dump_case_2()
 	dump_json_to_file(cur_space_json, "case_2.json");
 }
 
-// ����һ�� ��entity
+// 划分一次 无entity
 void dump_case_3()
 {
 	cell_bound temp_bound;
@@ -146,7 +146,7 @@ void dump_case_3()
 	dump_json_to_file(cur_space_json, "case_3.json");
 }
 
-// ����һ�� ��entity
+// 划分一次 有entity
 void dump_case_4()
 {
 	cell_bound temp_bound;
@@ -164,7 +164,7 @@ void dump_case_4()
 	dump_json_to_file(cur_space_json, "case_4.json");
 }
 
-// �������� ��entity
+// 划分两次 有entity
 void dump_case_5()
 {
 	cell_bound temp_bound;
@@ -184,7 +184,7 @@ void dump_case_5()
 	dump_json_to_file(cur_space_json, "case_5.json");
 }
 
-// �����Ĵ� ��entity
+// 划分三次 有entity
 void dump_case_6()
 {
 	cell_bound temp_bound;

@@ -27,6 +27,18 @@ struct LabelPoint
 
 };
 
+struct text_with_center
+{
+	spiritsaway::shape_drawer::Point center;
+	std::uint16_t font_size;
+	std::string font_name;
+	std::string u8_text;
+	spiritsaway::shape_drawer::Color color;
+
+	void draw_png(spiritsaway::shape_drawer::PngImage& out_png) const;
+	void draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) const;
+};
+
 struct cell_space
 {
 	spiritsaway::shape_drawer::Point min_xy;
@@ -37,9 +49,7 @@ struct cell_space
 	spiritsaway::shape_drawer::Color real_color;
 	spiritsaway::shape_drawer::Color ghost_color;
 
-	std::uint16_t font_sz;
-	std::string font_name;
-
+	text_with_center label_info;
 
 
 	void draw_png(spiritsaway::shape_drawer::PngImage& out_png) const;
@@ -66,9 +76,19 @@ struct cell_region_config
 	}
 	bool intersect(const cell_region_config& other, float boundary_radius) const
 	{
-		auto new_region = calc_union(other);
-		auto region_diff = new_region.max_xy - new_region.min_xy;
-		return region_diff.x <= boundary_radius && region_diff.y <= boundary_radius;
+		spiritsaway::utility::cell_bound aabb1;
+		aabb1.min.x = min_xy.x;
+		aabb1.min.z = min_xy.y;
+		aabb1.max.x = max_xy.x;
+		aabb1.max.z = max_xy.y;
+
+		spiritsaway::utility::cell_bound aabb2;
+		aabb2.min.x = other.min_xy.x - boundary_radius;
+		aabb2.min.z = other.min_xy.y - boundary_radius;
+		aabb2.max.x = other.max_xy.x + boundary_radius;
+		aabb2.max.z = other.max_xy.y + boundary_radius;
+
+		return aabb1.intersect(aabb2);
 	}
 };
 
@@ -97,7 +117,6 @@ struct space_draw_container
 	space_draw_config draw_config;
 	double draw_scale;
 	double ghost_radius;
-	// spiritsaway::shape_drawer::Point space_origin_offset;
 	spiritsaway::shape_drawer::Point region_min_xy;
 
 	void calc_region_adjacent_matrix();

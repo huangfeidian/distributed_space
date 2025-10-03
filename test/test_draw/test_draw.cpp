@@ -31,7 +31,7 @@ int main(int argc, const char** argv)
 		std::cout << "fail to load json from " << argv[1] << std::endl;
 		return 1;
 	}
-	space_cells cur_space_cells(space_cells::cell_bound{}, std::string{}, std::string{});
+	space_cells cur_space_cells(cell_bound{}, std::string{}, std::string{}, 1000);
 	if (!cur_space_cells.decode(space_data_json))
 	{
 		std::cout << "fail to decode space_cells from " << space_data_json << std::endl;
@@ -55,7 +55,7 @@ int main(int argc, const char** argv)
 	}
 	auto microsecondsUTC = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	auto cur_file_name = "dump_space_" + format_timepoint(microsecondsUTC);
-	auto folder_name = "test_draw";
+	auto folder_name = "result_images";
 	draw_cell_region(cur_space_cells, cur_draw_config, folder_name, cur_file_name);
 	return 1;
 }
