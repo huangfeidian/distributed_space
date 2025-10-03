@@ -696,6 +696,11 @@ namespace spiritsaway::utility
 			{
 				continue;
 			}
+			auto cur_boundary = one_cell_node->boundary();
+			if ((cur_boundary.max.x - cur_boundary.min.x < 8 * m_ghost_radius) && (cur_boundary.max.z - cur_boundary.min.z < 8 * m_ghost_radius))
+			{
+				continue;
+			}
 			if (one_cell_node->get_smoothed_load() < lb_param.min_cell_load_when_split)
 			{
 				continue;

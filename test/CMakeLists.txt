@@ -31,3 +31,5 @@ add_subdirectory(space_draw)
 add_subdirectory(dump_space)
 
 add_subdirectory(test_draw)
+
+add_subdirectory(load_balance_test)

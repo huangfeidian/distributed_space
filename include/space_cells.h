@@ -185,13 +185,16 @@ namespace spiritsaway::utility
 		// 第一个创建的cell就是master_cell
 		// 这个cell无法被合并到其他节点 同时也无法被负载均衡删除
 		std::string m_master_cell_id;
+
+		// 任何一个cell的长和宽必须大于等于四倍的ghost_radius
 		double m_ghost_radius;
 
 	public:
 		// 选择一个合适的cell来分割 分割要求
 		// 1. 这个cell所在的game load 要大于指定阈值
 		// 2. 这个cell的load要大于指定阈值
-		// 3. 选取cell load最大的
+		// 3. 长和宽至少有一个要大于8倍的ghost_radius 这样才能保证分割后的两个cell都有4倍radius
+		// 选取cell load最大的
 		const cell_node* get_best_cell_to_split(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param) const;
 		~space_cells();
 

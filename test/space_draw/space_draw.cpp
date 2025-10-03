@@ -486,7 +486,8 @@ void draw_cell_region(const spiritsaway::utility::space_cells& cur_cell_region, 
 			new_leaf_config.min_xy.y = one_cell_ptr->boundary().min.z;
 			new_leaf_config.max_xy.x = one_cell_ptr->boundary().max.x;
 			new_leaf_config.max_xy.y = one_cell_ptr->boundary().max.z;
-			new_leaf_config.name = one_cell_ptr->game_id() + "::" + one_cell_ptr->space_id();
+			int real_num = 0;
+			int ghost_num = 0;
 			new_leaf_config.points.reserve(one_cell_ptr->get_entity_loads().size());
 			for (const auto& one_entity : one_cell_ptr->get_entity_loads())
 			{
@@ -496,7 +497,17 @@ void draw_cell_region(const spiritsaway::utility::space_cells& cur_cell_region, 
 				temp_point.pos.x = one_entity.pos[0];
 				temp_point.pos.y = one_entity.pos[1];
 				new_leaf_config.points.push_back(temp_point);
+				if (one_entity.is_real)
+				{
+					real_num++;
+				}
+				else
+				{
+					ghost_num++;
+				}
 			}
+			std::string final_region_label = one_cell_ptr->game_id() + "::" + one_cell_ptr->space_id() + " real(" + std::to_string(real_num) + ") ghost(" + std::to_string(ghost_num) + ") load(" + std::to_string(int(one_cell_ptr->get_smoothed_load())) + ")";
+			new_leaf_config.name = final_region_label;
 			cur_cell_configuration.regions.push_back(new_leaf_config);
 		}
 		else
