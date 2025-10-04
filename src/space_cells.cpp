@@ -198,13 +198,13 @@ namespace spiritsaway::utility
 	}
 
 
-	bool space_cells::cell_node::balance(bool is_x, double split_v)
+	bool space_cells::cell_node::balance(double split_v)
 	{
 		if(is_leaf())
 		{
 			return false;
 		}
-		if(is_x)
+		if(m_is_split_x)
 		{
 			if(m_children[0]->m_boundary.min.x == m_children[1]->m_boundary.min.x)
 			{
@@ -234,74 +234,69 @@ namespace spiritsaway::utility
 		m_children[1]->m_cell_load_report_counter = 0;
 		return true;
 	}
-	// (game_id, space_id)
-	std::pair<std::string, std::string> space_cells::cell_node::merge_to_child(const std::string& dest)
+	
+	void space_cells::cell_node::merge_to_child(const std::string& dest)
 	{
-		std::pair<std::string, std::string> child_to_del;
-		cell_node* remain_cell = m_children[0];
-		if(dest == m_children[0]->m_space_id)
-		{
-			child_to_del.first = m_children[1]->m_game_id;
-			child_to_del.second = m_children[1]->m_space_id;
-		}
-		else
-		{
-			remain_cell = m_children[1];
-			child_to_del.first = m_children[0]->m_game_id;
-			child_to_del.second = m_children[0]->m_space_id;
-		}
-
 		m_entity_loads.clear();
 		m_cell_load_report_counter = 0;
 		m_space_id = dest;
+		if (m_children[0]->space_id() == dest)
+		{
+			m_game_id = m_children[0]->game_id();
+		}
+		else
+		{
+			m_game_id = m_children[1]->game_id();
+		}
 		m_ready = true;
 		delete m_children[0];
 		delete m_children[1];
 		m_children[0] = nullptr;
 		m_children[1] = nullptr;
-		return child_to_del;
 	}
 
-	// (game_id, space_id)
-	std::pair<std::string, std::string> space_cells::merge_to(const std::string& space_id)
+	
+	std::string space_cells::merge_to_sibling(const std::string& space_id)
 	{
-		auto dest_node_iter = m_cells.find(space_id);
-		if(dest_node_iter == m_cells.end())
+		auto remove_node_iter = m_cells.find(space_id);
+		if(remove_node_iter == m_cells.end())
 		{
 			return {};
 		}
-		auto dest_node = dest_node_iter->second;
-		if(!dest_node->is_leaf())
+		auto remove_node = remove_node_iter->second;
+		if(!remove_node->is_leaf())
 		{
 			return {};
 		}
-		auto sibling_node = dest_node->sibling();
+		if (!remove_node->ready())
+		{
+			return {};
+		}
+		if (remove_node->game_id() == m_master_cell_id)
+		{
+			return {};
+		}
+		auto sibling_node = remove_node->sibling();
 		if (!sibling_node || !sibling_node->is_leaf())
 		{
 			return {};
 		}
-		if (!sibling_node->ready() || !dest_node->ready())
+		if (!sibling_node->ready() || !remove_node->ready())
 		{
 			return {};
 		}
-		if (sibling_node->game_id() == m_master_cell_id)
-		{
-			return {};
-		}
-		auto cur_parent = dest_node->parent();
+		
+		auto cur_parent = remove_node->parent();
 		if(!cur_parent)
 		{
 			return {};
 		}
-		auto child_to_del = cur_parent->merge_to_child(space_id);
-		if(child_to_del.second.empty())
-		{
-			return {};
-		}
-		m_cells.erase(dest_node_iter);
-		m_cells.erase(child_to_del.second);
+		std::string remove_node_game_id = remove_node->game_id();
+		cur_parent->merge_to_child(sibling_node->space_id());
+		
+		m_cells.erase(remove_node_iter);
 		m_cells[space_id] = cur_parent;
-		return child_to_del;
+		return remove_node_game_id;
 	}
 	bool space_cells::check_valid_space_id(const std::string& space_id) const
 	{
@@ -552,14 +547,19 @@ namespace spiritsaway::utility
 		return true;
 
 	}
-	bool space_cells::balance(bool is_x, double split_v, const std::string& cell_id)
+	bool space_cells::balance(double split_v, const std::string& cell_id)
 	{
 		auto cur_node_iter = m_cells.find(cell_id);
 		if(cur_node_iter == m_cells.end())
 		{
 			return false;
 		}
-		cur_node_iter->second->balance(is_x, split_v);
+		auto cur_sibling = cur_node_iter->second->sibling();
+		if (!cur_sibling || !cur_sibling->is_leaf())
+		{
+			return false;
+		}
+		cur_node_iter->second->m_parent->balance(split_v);
 		return true;
 		
 	}
@@ -617,7 +617,7 @@ namespace spiritsaway::utility
 
 	}
 
-	bool space_cells::cell_node::calc_offset_axis(float load_to_offset,  double& out_split_axis, float& offseted_load) const
+	bool space_cells::cell_node::calc_offset_axis(float load_to_offset,  double& out_split_axis, float& offseted_load, float ghost_radius) const
 	{
 		if (!is_leaf())
 		{
@@ -637,11 +637,17 @@ namespace spiritsaway::utility
 
 		int axis = 0; // 0 for x 1 for z
 		bool should_reverse = false;
+		float split_boundary = 0;
 		if (is_x)
 		{
 			if (m_boundary.min.x < cur_sibling->boundary().min.x)
 			{
 				should_reverse = true;
+				split_boundary = m_boundary.max.x - 4* ghost_radius;
+			}
+			else
+			{
+				split_boundary = m_boundary.min.x + 4 * ghost_radius;
 			}
 		}
 		else
@@ -650,6 +656,11 @@ namespace spiritsaway::utility
 			if (m_boundary.min.z < cur_sibling->boundary().min.z)
 			{
 				should_reverse = true;
+				split_boundary = m_boundary.max.z - 4 * ghost_radius;
+			}
+			else
+			{
+				split_boundary = m_boundary.min.z + 4 * ghost_radius;
 			}
 		}
 		
@@ -665,12 +676,23 @@ namespace spiritsaway::utility
 		}
 		
 		float accumulated_load = 0;
-		double pre_split_candidate = sorted_entity_loads[0].pos[axis];
+		double pre_split_candidate = sorted_entity_loads[0].pos[axis] - 100;
+		
+
 		for (const auto& one_entity_load : sorted_entity_loads)
 		{
 			if (one_entity_load.pos[axis] != pre_split_candidate)
 			{
-				if (accumulated_load >= load_to_offset)
+				bool boundary_check_result = true;
+				if (should_reverse)
+				{
+					boundary_check_result = one_entity_load.pos[axis] > split_boundary;
+				}
+				else
+				{
+					boundary_check_result = one_entity_load.pos[axis] < split_boundary;
+				}
+				if (!boundary_check_result || accumulated_load >= load_to_offset)
 				{
 					offseted_load = accumulated_load;
 					out_split_axis = pre_split_candidate;
@@ -737,7 +759,7 @@ namespace spiritsaway::utility
 				continue;
 			}
 			auto cur_sibling = one_cell_node->sibling();
-			if (cur_sibling->cell_load_report_counter() <= lb_param.min_cell_load_report_counter_when_remove)
+			if (!cur_sibling || cur_sibling->cell_load_report_counter() <= lb_param.min_cell_load_report_counter_when_remove)
 			{
 				continue;
 			}
@@ -769,7 +791,7 @@ namespace spiritsaway::utility
 				continue;
 			}
 			auto cur_sibling = one_cell_node->sibling();
-			if (cur_sibling->cell_load_report_counter() <= lb_param.min_cell_load_report_counter_when_shrink)
+			if (!cur_sibling || cur_sibling->cell_load_report_counter() <= lb_param.min_cell_load_report_counter_when_shrink)
 			{
 				continue;
 			}
@@ -802,4 +824,101 @@ namespace spiritsaway::utility
 		return best_result;
 	}
 
+	cell_split_direction space_cells::cell_node::calc_best_split_direction(float ghost_radius) const
+	{
+		if (m_entity_loads.empty())
+		{
+			// 选择最长边的一个方向
+
+			if (m_boundary.max.x - m_boundary.min.x > m_boundary.max.z - m_boundary.min.z)
+			{
+				return cell_split_direction::left_x;
+			}
+			else
+			{
+				return cell_split_direction::low_z;
+			}
+
+		}
+		else
+		{
+			std::array<float, 4> split_gains;
+			std::fill(split_gains.begin(), split_gains.end(), 0);
+			auto entity_loads_copy = m_entity_loads;
+			float temp_acc_loads = 0;
+			for (int i = 0; i < 1; i++)
+			{
+				std::sort(entity_loads_copy.begin(), entity_loads_copy.end(), [i](const entity_load& a, const entity_load& b)
+					{
+						return a.pos[i] < b.pos[i];
+					});
+
+				for (const auto& one_load : entity_loads_copy)
+				{
+					if (one_load.pos[i] > m_boundary.min[i] + 4 * ghost_radius)
+					{
+						break;
+					}
+					else
+					{
+						temp_acc_loads += one_load.load;
+					}
+				}
+				split_gains[i*2] = temp_acc_loads;
+				std::reverse(entity_loads_copy.begin(), entity_loads_copy.end());
+				temp_acc_loads = 0;
+				for (const auto& one_load : entity_loads_copy)
+				{
+					if (one_load.pos[i] + 4 * ghost_radius < m_boundary.max[i])
+					{
+						break;
+					}
+					else
+					{
+						temp_acc_loads += one_load.load;
+					}
+				}
+				split_gains[i*2 + 1] = temp_acc_loads;
+			}
+			int best_dir = 0;
+			float best_gain = split_gains[0];
+			for (int i = 1; i < 4; i++)
+			{
+				if (split_gains[i] > best_gain)
+				{
+					best_gain = split_gains[i];
+					best_dir = i;
+				}
+			}
+			return cell_split_direction(best_dir);
+		}
+	}
+
+	const space_cells::cell_node* space_cells::split_at_direction(const std::string& origin_space_id, cell_split_direction split_direction, const std::string& new_space_id, const std::string& new_space_game_id)
+	{
+		auto cur_cell_iter = m_cells.find(origin_space_id);
+		if (cur_cell_iter == m_cells.end())
+		{
+			return nullptr;
+		}
+		auto cur_cell = cur_cell_iter->second;
+		if (!cur_cell->ready() || cur_cell->cell_load_report_counter() == 0)
+		{
+			return nullptr;
+		}
+		switch (split_direction)
+		{
+		case cell_split_direction::left_x:
+			return split_x(cur_cell->boundary().min.x + 4 * m_ghost_radius, origin_space_id, new_space_game_id, new_space_id, origin_space_id);
+		case cell_split_direction::right_x:
+			return split_x(cur_cell->boundary().max.x - 4 * m_ghost_radius, origin_space_id, new_space_game_id, origin_space_id, new_space_id);
+		case cell_split_direction::low_z:
+			return split_z(cur_cell->boundary().min.z + 4 * m_ghost_radius, origin_space_id, new_space_game_id, new_space_id, origin_space_id);
+		case cell_split_direction::high_z:
+			return split_z(cur_cell->boundary().max.z - 4 * m_ghost_radius, origin_space_id, new_space_game_id, origin_space_id, new_space_id);
+		default:
+			return nullptr;
+		}
+
+	}
 }

@@ -37,6 +37,14 @@ namespace spiritsaway::utility
 		shrink,
 	};
 
+	enum class cell_split_direction
+	{
+		left_x, // 从左侧x切分出 4*ghost_radius的范围
+		right_x, // 从右侧x切分出 4*ghost_radius的范围
+		low_z, // 从下方z切分出 4*ghost_radius的范围
+		high_z, // 从上方的z切分出 4*ghost_radius的范围
+	};
+
 	// 负载均衡相关参数
 	// 一般来说 shrink的report_counter周期最小
 	// split的周期要比shrink大一倍
@@ -53,6 +61,8 @@ namespace spiritsaway::utility
 		float min_game_load_when_split; // 在split时 当前cell所在game的最小负载
 		float min_cell_load_when_split; // 在split时 当前cell的最小load
 		int min_cell_load_report_counter_when_split; // 在考虑split时 一个cell的最小负载汇报次数
+
+		float load_to_offset; // 在考虑shrink的时候 每次缩小的load
 	};
 	struct entity_load
 	{
@@ -94,7 +104,7 @@ namespace spiritsaway::utility
 		private:
 			std::string m_space_id;
 			std::string m_game_id;
-			cell_bound m_boundary;
+			cell_bound m_boundary; // boundary的长宽都需要大于四倍的ghost_radius
 			std::array<cell_node*, 2> m_children;
 			cell_node* m_parent = nullptr;
 			bool m_ready = false;
@@ -115,7 +125,8 @@ namespace spiritsaway::utility
 			}
 			cell_node* split_x(double x, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id, const std::string& new_parent_space_id);
 			cell_node* split_z(double z, const std::string& new_space_game_id, const std::string& low_space_id, const std::string& up_space_id, const std::string& new_parent_space_id);
-			bool balance(bool is_x, double split_v);
+			// 将两个子节点的分界线调整为split_v
+			bool balance(double split_v);
 			bool is_leaf() const
 			{
 				return !m_children[0];
@@ -156,8 +167,8 @@ namespace spiritsaway::utility
 			{
 				return m_parent;
 			}
-			// 当前节点的两个子节点合并 结果里first为game_id second为space_id
-			std::pair<std::string, std::string> merge_to_child(const std::string& dest);
+			// 当前节点的两个子节点合并 
+			void merge_to_child(const std::string& dest);
 
 			json encode() const;
 			float get_smoothed_load() const;
@@ -167,7 +178,10 @@ namespace spiritsaway::utility
 			}
 			void update_load(float cur_load, const std::vector<entity_load>& new_entity_loads);
 			// 计算如果需要减少load_to_offset的负载，应该切分的位置
-			bool calc_offset_axis(float load_to_offset, double& out_split_axis, float& offseted_load) const;
+			// 保留长宽都要大于4*ghost_radius
+			bool calc_offset_axis(float load_to_offset, double& out_split_axis, float& offseted_load, float ghost_radius) const;
+			// 计算split时的最佳分割方向
+			cell_split_direction calc_best_split_direction(float ghost_radius) const;
 
 		private:
 			bool set_child(int index, cell_node* new_child);
@@ -213,11 +227,13 @@ namespace spiritsaway::utility
 		space_cells(const cell_bound& bound, const std::string& game_id, const std::string& space_id, const double in_ghost_radius);
 		const cell_node* split_x(double x, const std::string& origin_space_id, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id);
 		const cell_node* split_z(double z, const std::string& origin_space_id, const std::string& new_space_game_id,const std::string& low_space_id, const std::string& high_space_id);
-		bool balance(bool is_x, double split_v, const std::string& cell_id);
-		// 将space_id对应节点的兄弟节点合并到space_id对应节点
-		// 返回的pair 第一个是对应要删除node的game_id 第二个是要删除node的space_id
-		// 失败的情况下两个值都是空
-		std::pair<std::string, std::string> merge_to(const std::string& space_id);
+		const cell_node* split_at_direction(const std::string& origin_space_id, cell_split_direction split_direction, const std::string& new_space_id, const std::string& new_space_game_id);
+		// 将cell_id对应的cell 与其兄弟节点的分界线调整为split_v
+		bool balance(double split_v, const std::string& cell_id);
+		// 将space_id对应节点合并到space_id对应兄弟节点
+		// 返回对应要删除node的game_id
+		// 失败的情况下返回值都是空
+		std::string merge_to_sibling(const std::string& space_id);
 		std::vector<const cell_node*> query_intersect(const cell_bound& bound) const;
 		const cell_node* query_point_region(double x, double z) const;
 		const std::unordered_map<std::string, cell_node*>& cells() const

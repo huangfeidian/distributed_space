@@ -1,7 +1,16 @@
 #include "../space_draw/space_draw.h"
 #include <random>
 #include <fstream>
+#include <unordered_set>
+#include <filesystem>
+
+
 using namespace spiritsaway::utility;
+void dump_json_to_file(const json& data, const std::string& path)
+{
+	std::ofstream ofs(path);
+	ofs << data.dump();
+}
 
 std::string format_timepoint(std::uint64_t milliseconds_since_epoch)
 {
@@ -38,10 +47,15 @@ std::vector<point_xz> generate_random_points(const cell_bound& cur_boundary, int
 	return result;
 }
 
-void generate_random_entity_load(space_cells& cur_space, int num)
+std::unordered_map<std::string, point_xz> generate_random_entity_load(space_cells& cur_space, int num)
 {
+	std::unordered_map<std::string, point_xz> result;
 	auto cur_boundary = cur_space.root_cell()->boundary();
 	auto temp_random_points = generate_random_points(cur_boundary, num);
+	for (int i = 0; i < temp_random_points.size(); i++)
+	{
+		result[std::to_string(i)] = temp_random_points[i];
+	}
 	std::vector< cell_bound> point_ghost_bound;
 	for (auto one_point : temp_random_points)
 	{
@@ -92,6 +106,7 @@ void generate_random_entity_load(space_cells& cur_space, int num)
 		}
 		cur_space.update_cell_load(one_space_id, total_load, temp_entity_loads);
 	}
+	return result;
 }
 void dump_json_to_file(const json& data, const std::string& path)
 {
@@ -100,11 +115,11 @@ void dump_json_to_file(const json& data, const std::string& path)
 }
 
 // 执行migrate 每个cell最多迁出max_cell_migrate_num个
-void do_migrate(space_cells& cur_space, int max_cell_migrate_num)
+std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int max_cell_migrate_num, const std::unordered_map<std::string, point_xz>& entity_poses)
 {
 	std::unordered_map<std::string, std::string> entity_to_real_region;
 	std::unordered_map<std::string, std::vector<std::string>> region_real_entities;
-	std::unordered_map<std::string, point_xz> entity_poses;
+	std::unordered_map<std::string, float> result_game_loads;
 	for (const auto& [one_space_id, one_cell] : cur_space.all_cells())
 	{
 		if (!one_cell->is_leaf())
@@ -117,7 +132,6 @@ void do_migrate(space_cells& cur_space, int max_cell_migrate_num)
 		{
 			if (one_entity_load.is_real)
 			{
-				entity_poses[one_entity_load.name] = one_entity_load.pos;
 				if (!one_cell->boundary().cover(one_entity_load.pos.x, one_entity_load.pos.z) && temp_migrate_num < max_cell_migrate_num)
 				{
 					temp_migrate_num++;
@@ -133,10 +147,7 @@ void do_migrate(space_cells& cur_space, int max_cell_migrate_num)
 			}
 		}
 	}
-	for (const auto& [one_entity_id, one_space_id] : entity_to_real_region)
-	{
-		auto cur_pos = entity_poses[one_entity_id];
-	}
+
 	std::vector< cell_bound> point_ghost_bound;
 	std::vector<point_xz> entity_pos_vec;
 	std::vector<std::string> entity_names;
@@ -156,7 +167,12 @@ void do_migrate(space_cells& cur_space, int max_cell_migrate_num)
 	std::vector<std::string> real_cells_for_pos;
 	for (const auto& [one_entity_id, one_point] : entity_poses)
 	{
-		auto cur_real_cell = entity_to_real_region[one_entity_id];
+		auto& cur_real_cell = entity_to_real_region[one_entity_id];
+		if (cur_real_cell.empty()) // 对应一些被remove的节点的entity
+		{
+			cur_real_cell = cur_space.query_point_region(one_point.x, one_point.z)->space_id();
+			region_real_entities[cur_real_cell].push_back(one_entity_id);
+		}
 		real_cells_for_pos.push_back(cur_real_cell);
 	}
 	for (const auto& [one_space_id, one_cell] : cur_space.all_cells())
@@ -190,29 +206,143 @@ void do_migrate(space_cells& cur_space, int max_cell_migrate_num)
 			}
 		}
 		cur_space.update_cell_load(one_space_id, total_load, temp_entity_loads);
+		result_game_loads[one_cell->game_id()] += total_load + 2;
 	}
+	return result_game_loads;
 }
 
-void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param, const std::unordered_map<std::string, float>& game_loads)
+
+std::string choose_min_load_game(const std::unordered_map<std::string, float>& game_loads, const space_cells& cur_space)
+{
+	if (game_loads.empty())
+	{
+		return {};
+	}
+	std::unordered_set<std::string> used_games;
+	for (const auto& [one_cell_id, one_cell_ptr] : cur_space.all_cells())
+	{
+		used_games.insert(one_cell_ptr->game_id());
+	}
+	std::string best_game;
+	float best_load = 1000000;
+	for (const auto& [one_game_id, one_load] : game_loads)
+	{
+		if (used_games.count(one_game_id))
+		{
+			continue;
+		}
+		if (one_load < best_load)
+		{
+			best_load = one_load;
+			best_game = one_game_id;
+		}
+	}
+	return best_game;
+}
+void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param, const std::unordered_map<std::string, float>& game_loads, int iteration)
 {
 	auto cur_split_node = cur_space.get_best_cell_to_split(game_loads, lb_param);
 	if (cur_split_node)
 	{
-		//TODO
+		auto cur_split_direction = cur_split_node->calc_best_split_direction(cur_space.ghost_radius());
+		auto cur_best_game = choose_min_load_game(game_loads, cur_space);
+		if (!cur_best_game.empty())
+		{
+			auto new_space_id = "game" + std::to_string(iteration);
+			cur_space.split_at_direction(cur_split_node->space_id(), cur_split_direction, new_space_id, cur_best_game);
+			cur_space.set_ready(new_space_id);
+			return;
+		}
 	}
-	// TODO
+	auto cur_shrink_node = cur_space.get_best_cell_to_shrink(game_loads, lb_param);
+	if (cur_shrink_node)
+	{
+		double out_split_axis = 0;
+		float offseted_load = 0;
+		if (cur_shrink_node->calc_offset_axis(lb_param.load_to_offset, out_split_axis, offseted_load, cur_space.ghost_radius()))
+		{
+			if (offseted_load > lb_param.load_to_offset / 2)
+			{
+				cur_space.balance(out_split_axis, cur_shrink_node->space_id());
+				return;
+			}
+		}
+	}
+	auto cur_remove_node = cur_space.get_best_cell_to_remove(game_loads, lb_param);
+	if (cur_remove_node)
+	{
+		cur_space.merge_to_sibling(cur_remove_node->space_id());
+	}
 }
-void lb_case_1()
+void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir)
 {
 	cell_bound temp_bound;
 	temp_bound.min.x = -10000;
 	temp_bound.max.x = 15000;
 	temp_bound.min.z = 8000;
 	temp_bound.max.z = 17000;
+	cell_load_balance_param cur_lb_param;
+	cur_lb_param.load_to_offset = 10;
+	cur_lb_param.max_cell_load_when_remove = 6;
+	cur_lb_param.min_cell_load_report_counter_when_remove = 10;
+	cur_lb_param.min_cell_load_report_counter_when_shrink = 3;
+	cur_lb_param.min_cell_load_report_counter_when_split = 6;
+	cur_lb_param.min_cell_load_when_shrink = 20;
+	cur_lb_param.min_cell_load_when_split = 40;
+	cur_lb_param.min_game_load_when_split = 85;
+	
 	std::string root_space_id = "space1";
 	std::vector<std::string> games = { "game1", "game2", "game3", "game4" };
 	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
 	cur_space.set_ready(root_space_id);
-	generate_random_entity_load(cur_space, 200);
+	auto cur_entity_poses = generate_random_entity_load(cur_space, 200);
+	std::string cur_result_dir = dest_dir + "/lb_case1";
+	std::filesystem::create_directories(cur_result_dir);
+	draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_0");
+	dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_0" + ".json");
+	for (int i = 0; i < 20; i++)
+	{
+		auto cur_game_loads = do_migrate(cur_space, 20, cur_entity_poses);
+		for (const auto& one_game : games)
+		{
+			if (!cur_game_loads.count(one_game))
+			{
+				cur_game_loads[one_game] = 1.0;
+			}
+		}
+		do_balance(cur_space, cur_lb_param, cur_game_loads, i);
+		draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_" + std::to_string(i+1));
+		dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_" + std::to_string(i + 1) + ".json");
+	}
 
+}
+
+int main(int argc, const char** argv)
+{
+	if (argc < 2)
+	{
+		std::cout << "should provide draw_config json" << std::endl;
+		return 1;
+	}
+	
+	auto draw_config_json = load_json_file(argv[1]);
+	if (draw_config_json.is_null())
+	{
+		std::cout << "fail to load json from " << argv[1] << std::endl;
+		return 1;
+	}
+	space_draw_config cur_draw_config;
+	try
+	{
+		draw_config_json.get_to(cur_draw_config);
+	}
+	catch (std::exception& e)
+	{
+		std::cout << "fail to decode space_draw_config from " << draw_config_json << " exception " << e.what() << std::endl;
+		return 1;
+	}
+	auto microsecondsUTC = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	auto cur_folder_name = "dump_space_" + format_timepoint(microsecondsUTC);
+	lb_case_1(cur_draw_config, cur_folder_name);
+	return 1;
 }
