@@ -228,6 +228,8 @@ namespace spiritsaway::utility
 		// 2. 这个cell的负载转移到兄弟节点之后 兄弟节点game的load 不能比当前game的load高
 		// 3. 选取其中 cell load最大的
 		const cell_node* get_best_cell_to_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
+
+		// TODO 增加调整内部节点边界的方式
 	public:
 		
 		space_cells(const cell_bound& bound, const std::string& game_id, const std::string& space_id, const double in_ghost_radius);
