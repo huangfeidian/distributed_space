@@ -845,6 +845,7 @@ namespace spiritsaway::utility
 
 	cell_split_direction space_cells::cell_node::calc_best_split_direction(float ghost_radius) const
 	{
+		
 		if (m_entity_loads.empty())
 		{
 			// 选择最长边的一个方向
@@ -898,6 +899,32 @@ namespace spiritsaway::utility
 					}
 				}
 				split_gains[i*2 + 1] = temp_acc_loads;
+			}
+			// 避免新的子节点与原来的兄弟节点划分方向相同 以免出现连续多个同方向划分
+			if (m_parent)
+			{
+				if (m_parent->is_split_x())
+				{
+					if (this == m_parent->m_children[0])
+					{
+						split_gains[int(cell_split_direction::right_x)] *= 0.5f;
+					}
+					else
+					{
+						split_gains[int(cell_split_direction::left_x)] *= 0.5f;
+					}
+				}
+				else
+				{
+					if (this == m_parent->m_children[0])
+					{
+						split_gains[int(cell_split_direction::high_z)] *= 0.5f;
+					}
+					else
+					{
+						split_gains[int(cell_split_direction::low_z)] *= 0.5f;
+					}
+				}
 			}
 			int best_dir = 0;
 			float best_gain = split_gains[0];

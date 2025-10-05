@@ -39,6 +39,18 @@ struct text_with_center
 	void draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) const;
 };
 
+struct text_with_left
+{
+	spiritsaway::shape_drawer::Point left;
+	std::uint16_t font_size;
+	std::string font_name;
+	std::string u8_text;
+	spiritsaway::shape_drawer::Color color;
+	std::uint32_t width() const;
+	void draw_png(spiritsaway::shape_drawer::PngImage& out_png) const;
+	void draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) const;
+};
+
 struct cell_space
 {
 	spiritsaway::shape_drawer::Point min_xy;
@@ -114,17 +126,20 @@ struct space_draw_container
 	std::unordered_map<std::string, agent_info> agents;
 	std::vector<spiritsaway::shape_drawer::Line> split_lines;
 
+	std::vector<std::string> cell_captions;
 	space_draw_config draw_config;
 	double draw_scale;
 	double ghost_radius;
 	spiritsaway::shape_drawer::Point region_min_xy;
-
+	Point caption_begin_pos;
 	void calc_region_adjacent_matrix();
 	bool check_region_color_match(int target) const;
 	bool calc_region_colors_recursive(int i);
 	bool calc_region_colors();
 	void calc_agents();
 	void calc_canvas();
+	void calc_split_lines(const spiritsaway::utility::space_cells& cur_cell_region);
+	void calc_captions(const spiritsaway::utility::space_cells& cur_cell_region);
 	Point convert_pos_to_canvas(const Point& origin) const;
 	void draw_png(spiritsaway::shape_drawer::PngImage& out_png) const;
 	void draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) const;

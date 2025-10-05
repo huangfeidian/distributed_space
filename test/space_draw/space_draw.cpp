@@ -97,7 +97,40 @@ void text_with_center::draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) co
 	}
 }
 
+std::uint32_t text_with_left::width() const
+{
+	if (u8_text.empty())
+	{
+		return 0;
+	}
+	else
+	{
+		return string_util::utf8_util::utf8_to_uint(u8_text).size() * font_size;
+	}
+}
+void text_with_left::draw_png(spiritsaway::shape_drawer::PngImage& out_png) const
+{
+	if (!u8_text.empty())
+	{
+		std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(u8_text);
+		Point line_begin_p = left;
+		Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
+		Line cur_text_line = Line(line_begin_p, line_end_p);
+		out_png.draw_text(cur_text_line, text, font_name, font_size, color, 1.0f);
+	}
+}
 
+void text_with_left::draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) const
+{
+	if (!u8_text.empty())
+	{
+		std::vector<std::uint32_t> text = string_util::utf8_util::utf8_to_uint(u8_text);
+		Point line_begin_p = left;
+		Point line_end_p = line_begin_p + text.size() * font_size * Point(1, 0);
+		Line cur_text_line = Line(line_begin_p, line_end_p);
+		out_svg << LineText(cur_text_line, u8_text, font_name, font_size, color, 1.0f);
+	}
+}
 
 void cell_space::draw_png(PngImage& out_png) const
 {
@@ -164,7 +197,7 @@ bool space_draw_container::calc_region_colors_recursive(int i)
 
 	for (int j = 0; j < draw_config.region_colors.size(); j++)
 	{
-		regions[i].color_idx = j;
+		regions[i].color_idx = (j + 1 + regions[i-1].color_idx)% draw_config.region_colors.size();
 		if (!check_region_color_match(i))
 		{
 			continue;
@@ -186,7 +219,11 @@ bool space_draw_container::calc_region_colors()
 	{
 		regions[i].color_idx = 0;
 	}
-	return calc_region_colors_recursive(0);
+	if (regions.size() == 1)
+	{
+		return true;
+	}
+	return calc_region_colors_recursive(1);
 }
 
 
@@ -219,6 +256,44 @@ void space_draw_container::calc_agents()
 		
 	}
 }
+
+void space_draw_container::calc_split_lines(const spiritsaway::utility::space_cells& cur_cell_region)
+{
+	auto cur_root_node = cur_cell_region.root_cell();
+	std::vector<const spiritsaway::utility::space_cells::cell_node*> process_queue;
+	process_queue.push_back(cur_root_node);
+	while (!process_queue.empty())
+	{
+		auto cur_top = process_queue.back();
+		process_queue.pop_back();
+		std::string result_caption;
+		if (!cur_top->is_leaf())
+		{
+			auto cur_child_aabb = cur_top->children()[0]->boundary();
+			spiritsaway::shape_drawer::Line temp_split_line;
+			if (cur_top->is_split_x())
+			{
+				temp_split_line.from.x = (int)cur_child_aabb.max.x;
+				temp_split_line.to.x = (int)cur_child_aabb.max.x;
+				temp_split_line.from.y = (int)cur_child_aabb.min.z;
+				temp_split_line.to.y = (int)cur_child_aabb.max.z;
+
+			}
+			else
+			{
+				temp_split_line.from.y = (int)cur_child_aabb.max.z;
+				temp_split_line.to.y = (int)cur_child_aabb.max.z;
+				temp_split_line.from.x = (int)cur_child_aabb.min.x;
+				temp_split_line.to.x = (int)cur_child_aabb.max.x;
+			}
+			temp_split_line.width = draw_config.split_line_width;
+			temp_split_line.color = draw_config.split_color;
+			split_lines.push_back(temp_split_line);
+			process_queue.push_back(cur_top->children()[0]);
+			process_queue.push_back(cur_top->children()[1]);
+		}
+	}
+}
 void space_draw_container::calc_canvas()
 {
 	cell_region_config cur_aabb_region = regions[0];
@@ -247,6 +322,8 @@ void space_draw_container::calc_canvas()
 		one_line.from = convert_pos_to_canvas(one_line.from);
 		one_line.to = convert_pos_to_canvas(one_line.to);
 	}
+	caption_begin_pos = convert_pos_to_canvas(Point(cur_aabb_region.min_xy.x, cur_aabb_region.max_xy.y));
+	caption_begin_pos.y += 2* draw_config.font_size + draw_config.boundary_radius;
 }
 
 Point space_draw_container::convert_pos_to_canvas(const Point& origin_pos) const
@@ -288,6 +365,22 @@ void space_draw_container::draw_png(PngImage& out_png) const
 	{
 		one_agent_info.draw_png(out_png, draw_config.with_entity_label);
 	}
+	auto cur_caption_pos = caption_begin_pos;
+	for (const auto& one_caption : cell_captions)
+	{
+		if (cur_caption_pos.y >= 2 * draw_config.canvas_radius)
+		{
+			break;
+		}
+		text_with_left cur_text_line;
+		cur_text_line.left = cur_caption_pos;
+		cur_text_line.color = draw_config.region_label_color;
+		cur_text_line.font_name = draw_config.font_name;
+		cur_text_line.u8_text = one_caption;
+		cur_text_line.font_size = draw_config.font_size;
+		cur_text_line.draw_png(out_png);
+		cur_caption_pos.y += 2 * draw_config.font_size;
+	}
 }
 
 void space_draw_container::draw_svg(SvgGraph& out_svg) const
@@ -324,6 +417,23 @@ void space_draw_container::draw_svg(SvgGraph& out_svg) const
 	for (const auto& [one_agent_label, one_agent_info] : agents)
 	{
 		one_agent_info.draw_svg(out_svg, draw_config.with_entity_label);
+	}
+
+	auto cur_caption_pos = caption_begin_pos;
+	for (const auto& one_caption : cell_captions)
+	{
+		if (cur_caption_pos.y >= 2 * draw_config.canvas_radius)
+		{
+			break;
+		}
+		text_with_left cur_text_line;
+		cur_text_line.left = cur_caption_pos;
+		cur_text_line.color = draw_config.point_color;
+		cur_text_line.font_name = draw_config.font_name;
+		cur_text_line.u8_text = one_caption;
+		cur_text_line.font_size = draw_config.font_size;
+		cur_text_line.draw_svg(out_svg);
+		cur_caption_pos.y += 2 * draw_config.font_size;
 	}
 }
 
@@ -471,7 +581,65 @@ json load_json_file(const std::string& file_path)
 	return json::parse(str);
 }
 
+void space_draw_container::calc_captions(const spiritsaway::utility::space_cells& cur_cell_region)
+{
+	auto cur_root_node = cur_cell_region.root_cell();
+	std::vector<const spiritsaway::utility::space_cells::cell_node*> process_queue;
+	process_queue.push_back(cur_root_node);
+	while (!process_queue.empty())
+	{
+		auto cur_top = process_queue.back();
+		process_queue.pop_back();
+		std::string result_caption;
+		if (cur_top->is_leaf())
+		{
+			result_caption += "LeafNode-" + cur_top->space_id() +  " Boundary(" + json(cur_top->boundary()).dump() + ") " + " Game(" + cur_top->game_id() + ") ";
+			int real_num = 0;
+			int ghost_num = 0;
+			for (const auto& one_entity : cur_top->get_entity_loads())
+			{
+				if (one_entity.is_real)
+				{
+					real_num++;
+				}
+				else
+				{
+					ghost_num++;
+				}
+			}
+			result_caption += "real(" + std::to_string(real_num) + ") ghost(" + std::to_string(ghost_num) + ") load(" + std::to_string(int(cur_top->get_smoothed_load())) + ") ";
+			if (cur_top->parent())
+			{
+				result_caption += " Parent(InternalNode-" + cur_top->parent()->space_id() + ")";
+			}
+			cell_captions.push_back(result_caption);
+		}
+		else
+		{
+			result_caption += "InternalNode-" + cur_top->space_id()  +" Boundary(" + json(cur_top->boundary()).dump() + ") ";
+			result_caption += " IsSplitX(" + std::to_string(cur_top->is_split_x()) + ") ";
+			for (int i = 0; i < 2; i++)
+			{
+				result_caption += " Child" + std::to_string(i) + "(";
+				auto cur_child = cur_top->children()[i];
+				if (cur_child->is_leaf())
+				{
+					result_caption += "LeafNode-" + cur_child->space_id();
+				}
+				else
+				{
+					result_caption += "InternalNode-" + cur_child->space_id();
+				}
+				result_caption += ") ";
+			}
+			
+			cell_captions.push_back(result_caption);
+			process_queue.push_back(cur_top->children()[0]);
+			process_queue.push_back(cur_top->children()[1]);
 
+		}
+	}
+}
 void draw_cell_region(const spiritsaway::utility::space_cells& cur_cell_region, const space_draw_config& draw_config, const std::string& folder_path, const std::string& file_name_prefix)
 {
 	space_draw_container cur_cell_configuration;
@@ -506,38 +674,16 @@ void draw_cell_region(const spiritsaway::utility::space_cells& cur_cell_region, 
 					ghost_num++;
 				}
 			}
-			std::string final_region_label = one_cell_ptr->game_id() + "::" + one_cell_ptr->space_id() + " real(" + std::to_string(real_num) + ") ghost(" + std::to_string(ghost_num) + ") load(" + std::to_string(int(one_cell_ptr->get_smoothed_load())) + ")";
-			new_leaf_config.name = final_region_label;
+			new_leaf_config.name = one_cell_ptr->space_id();
 			cur_cell_configuration.regions.push_back(new_leaf_config);
 		}
-		else
-		{
-			auto cur_child_aabb = one_cell_ptr->children()[0]->boundary();
-			spiritsaway::shape_drawer::Line temp_split_line;
-			if (one_cell_ptr->is_split_x())
-			{
-				temp_split_line.from.x = (int)cur_child_aabb.max.x;
-				temp_split_line.to.x = (int)cur_child_aabb.max.x;
-				temp_split_line.from.y = (int)cur_child_aabb.min.z;
-				temp_split_line.to.y = (int)cur_child_aabb.max.z;
-
-			}
-			else
-			{
-				temp_split_line.from.y = (int)cur_child_aabb.max.z;
-				temp_split_line.to.y = (int)cur_child_aabb.max.z;
-				temp_split_line.from.x = (int)cur_child_aabb.min.x;
-				temp_split_line.to.x = (int)cur_child_aabb.max.x;
-			}
-			temp_split_line.width = draw_config.split_line_width;
-			temp_split_line.color = draw_config.split_color;
-			cur_cell_configuration.split_lines.push_back(temp_split_line);
-		}
 	}
+	cur_cell_configuration.calc_split_lines(cur_cell_region);
 	cur_cell_configuration.calc_canvas();
 	cur_cell_configuration.calc_region_adjacent_matrix();
 	cur_cell_configuration.calc_region_colors();
 	cur_cell_configuration.calc_agents();
+	cur_cell_configuration.calc_captions(cur_cell_region);
 	auto cur_png = PngImage(draw_config.font_info, folder_path + "/" + file_name_prefix + ".png", draw_config.canvas_radius, Color(255, 255, 255));
 	auto cur_svg = SvgGraph(draw_config.font_info, folder_path + "/" + file_name_prefix + ".svg", draw_config.canvas_radius, Color(255, 255, 255));
 

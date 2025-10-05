@@ -168,6 +168,10 @@ namespace spiritsaway::utility
 			{
 				return m_parent;
 			}
+			const cell_node* parent() const
+			{
+				return m_parent;
+			}
 			// 当前节点的两个子节点合并 
 			void merge_to_child(const std::string& dest);
 

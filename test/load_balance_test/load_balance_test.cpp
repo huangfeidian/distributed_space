@@ -270,7 +270,6 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 	if (cur_split_node)
 	{
 		auto cur_split_direction = cur_split_node->calc_best_split_direction(cur_space.ghost_radius());
-		cur_split_direction = cell_split_direction::right_x;
 		auto cur_best_game = choose_min_load_game(game_loads, cur_space);
 		if (!cur_best_game.empty())
 		{
@@ -339,7 +338,7 @@ void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir
 	std::filesystem::create_directories(cur_result_dir);
 	draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_0");
 	dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_0" + ".json");
-	for (int i = 0; i < 30; i++)
+	for (int i = 0; i < 40; i++)
 	{
 		logger->warn("iteration {}", i);
 		auto cur_game_loads = do_migrate(cur_space, 20, cur_entity_poses, logger);
@@ -352,6 +351,7 @@ void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir
 		}
 		logger->info("game_loads {}", json(cur_game_loads).dump());
 		do_balance(cur_space, cur_lb_param, cur_game_loads, i, logger);
+		logger->info("balance finish");
 		draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_" + std::to_string(i+1));
 		dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_" + std::to_string(i + 1) + ".json");
 	}
