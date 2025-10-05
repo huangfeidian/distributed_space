@@ -58,6 +58,7 @@ namespace spiritsaway::utility
 
 		float min_cell_load_when_shrink; // 在shrink时 当前cell的load 的最小阈值
 		int min_cell_load_report_counter_when_shrink; // 在考虑shrink时 一个cell的最小负载汇报次数
+		float max_sibling_cell_load_when_shrink; // 在shrink时 兄弟节点cell的最大负载
 		float min_game_load_when_split; // 在split时 当前cell所在game的最小负载
 		float min_cell_load_when_split; // 在split时 当前cell的最小load
 		int min_cell_load_report_counter_when_split; // 在考虑split时 一个cell的最小负载汇报次数
@@ -172,6 +173,7 @@ namespace spiritsaway::utility
 
 			json encode() const;
 			float get_smoothed_load() const;
+			float get_latest_load() const;
 			std::uint32_t cell_load_report_counter() const
 			{
 				return m_cell_load_report_counter;

@@ -101,7 +101,7 @@ namespace spiritsaway::utility
 		m_children[0] = new cell_node(left_boundary, m_game_id, left_space_id, this);
 		m_children[1] = new cell_node(right_boundary, m_game_id, right_space_id, this);
 		auto pre_space_id = m_space_id;
-		m_space_id = new_parent_space_id;
+		
 		int master_cell_idx = 0;
 		if (pre_space_id != left_space_id)
 		{
@@ -109,13 +109,14 @@ namespace spiritsaway::utility
 		}
 		on_split(master_cell_idx);
 		m_children[1 - master_cell_idx]->m_game_id = new_space_game_id;
+		m_space_id = new_parent_space_id;
 		return m_children[1 - master_cell_idx];
 	}
 
 	void space_cells::cell_node::on_split(int master_child_index)
 	{
-		m_children[master_child_index]->m_cell_loads = std::move(m_cell_loads);
-		m_children[master_child_index]->m_cell_load_report_counter = std::move(m_cell_load_report_counter);
+		m_children[master_child_index]->m_cell_loads[1] = get_latest_load();
+		m_children[master_child_index]->m_cell_load_report_counter = 1;
 		m_children[master_child_index]->m_entity_loads = std::move(m_entity_loads);
 		m_children[master_child_index]->set_ready();
 	}
@@ -141,7 +142,7 @@ namespace spiritsaway::utility
 		m_children[0] = new cell_node(low_boundary, m_game_id, low_space_id, this);
 		m_children[1] = new cell_node(high_boundary, m_game_id, high_space_id, this);
 		auto pre_space_id = m_space_id;
-		m_space_id = new_parent_space_id;
+		
 		int master_cell_idx = 0;
 		if (pre_space_id != low_space_id)
 		{
@@ -149,6 +150,7 @@ namespace spiritsaway::utility
 		}
 		on_split(master_cell_idx);
 		m_children[1 - master_cell_idx]->m_game_id = new_space_game_id;
+		m_space_id = new_parent_space_id;
 		return m_children[1 - master_cell_idx];
 	}
 	json space_cells::cell_node::encode() const
@@ -197,7 +199,10 @@ namespace spiritsaway::utility
 		return true;
 	}
 
-
+	float space_cells::cell_node::get_latest_load() const
+	{
+		return m_cell_loads[m_cell_load_report_counter % m_cell_loads.size()];
+	}
 	bool space_cells::cell_node::balance(double split_v)
 	{
 		if(is_leaf())
@@ -230,23 +235,31 @@ namespace spiritsaway::utility
 			m_children[0]->m_boundary.max.z = split_v;
 			m_children[1]->m_boundary.min.z = split_v;
 		}
-		m_children[0]->m_cell_load_report_counter = 0;
-		m_children[1]->m_cell_load_report_counter = 0;
+		m_children[0]->m_cell_loads[1] = m_children[0]->get_latest_load();
+		m_children[0]->m_cell_load_report_counter = 1;
+		
+		m_children[1]->m_cell_loads[1] = m_children[1]->get_latest_load();
+		m_children[1]->m_cell_load_report_counter = 1;
+		
 		return true;
 	}
 	
 	void space_cells::cell_node::merge_to_child(const std::string& dest)
 	{
 		m_entity_loads.clear();
-		m_cell_load_report_counter = 0;
+		m_cell_load_report_counter = 1;
 		m_space_id = dest;
 		if (m_children[0]->space_id() == dest)
 		{
 			m_game_id = m_children[0]->game_id();
+			m_entity_loads = std::move(m_children[0]->m_entity_loads);
+			m_cell_loads[1] = m_children[0]->get_latest_load();
 		}
 		else
 		{
 			m_game_id = m_children[1]->game_id();
+			m_entity_loads = std::move(m_children[1]->m_entity_loads);
+			m_cell_loads[1] = m_children[1]->get_latest_load();
 		}
 		m_ready = true;
 		delete m_children[0];
@@ -696,6 +709,7 @@ namespace spiritsaway::utility
 				{
 					offseted_load = accumulated_load;
 					out_split_axis = pre_split_candidate;
+					out_split_axis += should_reverse ? -1 : 1;
 					return true;
 				}
 				pre_split_candidate = one_entity_load.pos[axis];
@@ -795,7 +809,8 @@ namespace spiritsaway::utility
 			{
 				continue;
 			}
-			if (one_cell_node->get_smoothed_load() < lb_param.min_cell_load_when_shrink)
+			auto cur_node_smoothed_load = one_cell_node->get_smoothed_load();
+			if (cur_node_smoothed_load < lb_param.min_cell_load_when_shrink)
 			{
 				continue;
 			}
@@ -810,12 +825,16 @@ namespace spiritsaway::utility
 			{
 				continue;
 			}
-			if(sibling_game_iter->second + one_cell_node->get_smoothed_load() > temp_game_iter->second)
+			if(sibling_game_iter->second + lb_param.load_to_offset > temp_game_iter->second)
+			{
+				continue;
+			}
+			if (sibling_game_iter->second >= lb_param.max_sibling_cell_load_when_shrink)
 			{
 				continue;
 			}
 
-			if (!best_result || one_cell_node->get_smoothed_load() > best_result->get_smoothed_load())
+			if (!best_result || cur_node_smoothed_load > best_result->get_smoothed_load())
 			{
 				best_result = one_cell_node;
 			}
