@@ -62,7 +62,7 @@ namespace spiritsaway::utility
 		float min_game_load_when_split; // 在split时 当前cell所在game的最小负载
 		float min_cell_load_when_split; // 在split时 当前cell的最小load
 		std::uint32_t min_cell_load_report_counter_when_split; // 在考虑split时 一个cell的最小负载汇报次数
-
+		float min_sibling_game_load_diff_when_shrink; // 在缩容时 当前节点的game平均负载起码要比邻居节点的平均game负载高这个值
 		float load_to_offset; // 在考虑shrink的时候 每次缩小的load
 	};
 	struct entity_load
@@ -114,7 +114,12 @@ namespace spiritsaway::utility
 			std::vector<entity_load> m_entity_loads;
 			std::array<std::vector<std::uint16_t>,2> m_sorted_entity_load_idx_by_axis; // 存储m_entity_load数组的索引 使得这个数组对应的元素的pos按照坐标轴升序排列
 			std::uint32_t m_cell_load_report_counter = 0; // 汇报负载的次数 每次boundary改变之后都要重置为0
-			
+		private:
+			float m_total_cell_load; // 当前节点所有叶子节点的load总和
+			float m_total_game_load; // 当前节点所有叶子节点的的game load总和
+			std::vector<const cell_node*> m_child_leaf;
+			std::vector<std::string> m_child_games;
+			std::uint32_t m_min_cell_load_report_counter;
 		public:
 			cell_node(const cell_bound& in_bound, const std::string& in_game_id, const std::string& in_space_id, cell_node* in_parent)
 			: m_space_id(in_space_id)
@@ -187,26 +192,32 @@ namespace spiritsaway::utility
 			// 计算如果需要减少load_to_offset的负载，应该切分的位置
 			// 保留长宽都要大于4*ghost_radius
 			bool calc_offset_axis(float load_to_offset, double& out_split_axis, float& offseted_load, float ghost_radius) const;
-			// 计算split时的最佳分割方向
+			// 计算split时的最佳分割方向 每次都切分一个4*ghost_radius的区域 选择这个区域内负载最大的
 			cell_split_direction calc_best_split_direction(float ghost_radius) const;
 
 			// 计算当前节点的某个边界朝指定方向移动移动时的最大长度
 			// 要求移动后任意子节点仍然有面积 这里暂时不考虑ghost_radius
 
-			double calc_max_boundary_move_length(bool is_x, bool is_decreasing_max) const;
+			double calc_max_boundary_move_length(bool is_x, bool is_split_axis_smaller) const;
 
-			// 递归的移动当前区域的某个边界 is_x代表坐标轴 is_decreasing_max代表是缩小还是放大
-			void move_split_pos(double new_split_pos, bool is_x, bool is_decreasing_max);
+			// 递归的移动当前区域的某个边界 is_x代表坐标轴 is_split_axis_smaller代表是缩小还是放大
+			void move_split_pos(double new_split_pos, bool is_x, bool is_split_axis_smaller);
 
 			// 计算在以这个新的分割轴进行分割的时候 能够缩小的entity_load总和
-			float calc_move_split_offload(double new_split_pos, bool is_x, bool is_decreasing_max) const;
+			float calc_move_split_offload(double new_split_pos, bool is_x, bool is_split_axis_smaller) const;
+
+			bool check_can_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param, const double ghost_radius) const;
+
+			const cell_node* calc_shrink_node(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param, const double ghost_radius) const;
+
+			double calc_best_shrink_new_split_pos(const cell_load_balance_param& lb_param, const double ghost_radius) const;
 		private:
 			bool set_child(int index, cell_node* new_child);
 			void set_ready();
 			void on_split(int master_child_index);
 			void make_sorted_loads();
 			friend class space_cells;
-			
+			void update_load_stat(const std::unordered_map<std::string, float>& game_loads);
 		};
 	private:
 		std::unordered_map<std::string, cell_node*> m_leaf_nodes;
@@ -237,17 +248,19 @@ namespace spiritsaway::utility
 		// 2. 选取其中 cell load最小的
 		const cell_node* get_best_cell_to_remove(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
 
-		// 选择一个合适的cell来缩小边界 缩容要求
-		// 1. 这个cell的负载起码要大于指定阈值
-		// 2. 这个cell的负载转移到兄弟节点之后 兄弟节点game的load 不能比当前game的load高
-		// 3. 选取其中 cell load最大的
-		const cell_node* get_best_cell_to_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
+		// 选择一个合适的node来缩容
+		// 1. 这个node的平均game负载起码要大于指定阈值
+		// 2. 这个node的平均game 负载起码要比其兄弟节点的平均负载大于指定阈值
+		// 3. 这个cell的负载转移到兄弟节点之后 兄弟节点game的平均load 不能比当前game的平均load高
+		// 优先选取底部节点
+		const cell_node* get_best_node_to_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
 
-		// TODO 增加调整内部节点边界的方式
+		
 
 		// 计算一个节点 最大可能的shrink大小 这个节点可以是内部节点
 		// shrink后需要保证里面所有的叶子节点的长宽都要有4*ghost_radius
 		double calc_max_shrink_length(const cell_node* shrink_node) const;
+
 
 		
 	public:
@@ -308,5 +321,6 @@ namespace spiritsaway::utility
 		}
 		void update_cell_load(const std::string& cell_space_id, float cell_load, const std::vector<entity_load>& new_entity_loads);
 
+		void update_load_stat(const std::unordered_map<std::string, float>& game_loads);
 	};
 }

@@ -283,23 +283,21 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 			return;
 		}
 	}
-	auto cur_shrink_node = cur_space.get_best_cell_to_shrink(game_loads, lb_param);
+	auto cur_shrink_node = cur_space.get_best_node_to_shrink(game_loads, lb_param);
 	if (cur_shrink_node)
 	{
-		double out_split_axis = 0;
-		float offseted_load = 0;
-		if (cur_shrink_node->calc_offset_axis(lb_param.load_to_offset, out_split_axis, offseted_load, cur_space.ghost_radius()))
-		{
-			if (offseted_load > lb_param.load_to_offset / 2)
-			{
-				cur_space.balance(out_split_axis, cur_shrink_node->space_id());
-				cur_logger->info("{} balance at {} ", cur_shrink_node->space_id(), out_split_axis);
-				cur_logger->info("space {} has boundary {}", cur_shrink_node->space_id(), json(cur_shrink_node->boundary()).dump());
-				auto cur_sibling_node = cur_shrink_node->sibling();
-				cur_logger->info("space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
-				return;
-			}
-		}
+		double out_split_axis = cur_shrink_node->calc_best_shrink_new_split_pos(lb_param, cur_space.ghost_radius());
+		auto cur_sibling_node = cur_shrink_node->sibling();
+		cur_logger->info("{} balance at {} ", cur_shrink_node->space_id(), out_split_axis);
+		cur_logger->info("before balance space {} has boundary {}", cur_shrink_node->space_id(), json(cur_shrink_node->boundary()).dump());
+		cur_logger->info("before balance space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+
+		cur_space.balance(out_split_axis, cur_shrink_node->parent());
+		
+		cur_logger->info("after balance space {} has boundary {}", cur_shrink_node->space_id(), json(cur_shrink_node->boundary()).dump());
+		
+		cur_logger->info("after balance space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+		return;
 	}
 	auto cur_remove_node = cur_space.get_best_cell_to_remove(game_loads, lb_param);
 	if (cur_remove_node)
@@ -350,6 +348,7 @@ void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir
 			}
 		}
 		logger->info("game_loads {}", json(cur_game_loads).dump());
+		cur_space.update_load_stat(cur_game_loads);
 		do_balance(cur_space, cur_lb_param, cur_game_loads, i, logger);
 		logger->info("balance finish");
 		draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_" + std::to_string(i+1));
