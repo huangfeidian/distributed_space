@@ -40,7 +40,7 @@ std::vector<point_xz> generate_random_points(const cell_bound& cur_boundary , in
 
 void generate_random_entity_load(space_cells& cur_space, int num)
 {
-	auto cur_boundary = cur_space.root_cell()->boundary();
+	auto cur_boundary = cur_space.root_node()->boundary();
 	auto temp_random_points = generate_random_points(cur_boundary, num);
 	std::vector< cell_bound> point_ghost_bound;
 	for (auto one_point : temp_random_points)
@@ -57,10 +57,10 @@ void generate_random_entity_load(space_cells& cur_space, int num)
 	std::vector<const space_cells::cell_node*> real_cells_for_pos;
 	for (auto one_point : temp_random_points)
 	{
-		auto cur_real_cell = cur_space.query_point_region(one_point.x, one_point.z);
+		auto cur_real_cell = cur_space.query_leaf_for_point(one_point.x, one_point.z);
 		real_cells_for_pos.push_back(cur_real_cell);
 	}
-	for (const auto& [one_space_id, one_cell] : cur_space.all_cells())
+	for (const auto& [one_space_id, one_cell] : cur_space.all_leafs())
 	{
 		if (!one_cell->is_leaf())
 		{

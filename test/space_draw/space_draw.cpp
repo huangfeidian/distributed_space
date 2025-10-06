@@ -259,7 +259,7 @@ void space_draw_container::calc_agents()
 
 void space_draw_container::calc_split_lines(const spiritsaway::utility::space_cells& cur_cell_region)
 {
-	auto cur_root_node = cur_cell_region.root_cell();
+	auto cur_root_node = cur_cell_region.root_node();
 	std::vector<const spiritsaway::utility::space_cells::cell_node*> process_queue;
 	process_queue.push_back(cur_root_node);
 	while (!process_queue.empty())
@@ -461,7 +461,7 @@ void agent_info::draw_png(spiritsaway::shape_drawer::PngImage& out_png, bool wit
 		break;
 	case 2:
 	{
-		auto rect_half_extent = 1.0 / std::sqrt(5);
+		float rect_half_extent = 1.0 / std::sqrt(5);
 		spiritsaway::shape_drawer::Rectangle rect1(pos - Point(2* rect_half_extent*radius, rect_half_extent* radius), Point(2*rect_half_extent*radius, 2*rect_half_extent*radius), region_colors[0], true);
 		out_png << rect1;
 		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(0, rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
@@ -470,7 +470,7 @@ void agent_info::draw_png(spiritsaway::shape_drawer::PngImage& out_png, bool wit
 		break;
 	case 3:
 	{
-		auto rect_half_extent = 0.5 / std::sqrt(2);
+		float rect_half_extent = 0.5 / std::sqrt(2);
 		spiritsaway::shape_drawer::Rectangle rect1(pos - Point(2 * rect_half_extent * radius, 2*rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[0], true);
 		out_png << rect1;
 		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(0, 2* rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
@@ -482,7 +482,7 @@ void agent_info::draw_png(spiritsaway::shape_drawer::PngImage& out_png, bool wit
 		break;
 	case 4:
 	{
-		auto rect_half_extent = 0.5 / std::sqrt(2);
+		float rect_half_extent = 0.5 / std::sqrt(2);
 		spiritsaway::shape_drawer::Rectangle rect1(pos - Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[0], true);
 		out_png << rect1;
 		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(0, 2 * rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
@@ -583,7 +583,7 @@ json load_json_file(const std::string& file_path)
 
 void space_draw_container::calc_captions(const spiritsaway::utility::space_cells& cur_cell_region)
 {
-	auto cur_root_node = cur_cell_region.root_cell();
+	auto cur_root_node = cur_cell_region.root_node();
 	std::vector<const spiritsaway::utility::space_cells::cell_node*> process_queue;
 	process_queue.push_back(cur_root_node);
 	while (!process_queue.empty())
@@ -645,7 +645,7 @@ void draw_cell_region(const spiritsaway::utility::space_cells& cur_cell_region, 
 	space_draw_container cur_cell_configuration;
 	cur_cell_configuration.draw_config = draw_config;
 	cur_cell_configuration.ghost_radius = cur_cell_region.ghost_radius();
-	for (const auto& [one_cell_id, one_cell_ptr] : cur_cell_region.all_cells())
+	for (const auto& [one_cell_id, one_cell_ptr] : cur_cell_region.all_leafs())
 	{
 		if (one_cell_ptr->is_leaf())
 		{

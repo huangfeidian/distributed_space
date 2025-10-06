@@ -1,5 +1,43 @@
 #include "space_cells.h"
 
+namespace 
+{
+
+	template <typename T>
+	class vec_iter_wrapper
+	{
+		bool is_reverse;
+		const std::vector<T>& data_vec;
+		std::uint64_t idx;
+	public:
+		vec_iter_wrapper(const std::vector<T>& in_data_vec, bool in_is_reverse)
+			: is_reverse(in_is_reverse)
+			, data_vec(in_data_vec)
+			, idx(0)
+		{
+
+		}
+
+		bool valid() const
+		{
+			return idx < data_vec.size();
+		}
+
+		const T& get_and_next()
+		{
+			auto old_idx = idx;
+			idx++;
+			if (is_reverse)
+			{
+				return data_vec[data_vec.size() - old_idx - 1];
+			}
+			else
+			{
+				return data_vec[old_idx];
+			}
+		}
+	};
+}
 namespace spiritsaway::utility
 {
 	bool cell_bound::intersect(const cell_bound& other) const
@@ -23,9 +61,9 @@ namespace spiritsaway::utility
 		return true;
 	}
 	space_cells::space_cells(const cell_bound& bound, const std::string& game_id, const std::string& space_id, double in_ghost_radius)
-	: m_root_cell(new cell_node(bound, game_id, space_id, nullptr))
+	: m_root_node(new cell_node(bound, game_id, space_id, nullptr))
 	{
-		m_cells[space_id] = m_root_cell;
+		m_leaf_nodes[space_id] = m_root_node;
 		m_master_cell_id = space_id;
 		m_ghost_radius = in_ghost_radius;
 	}
@@ -77,8 +115,27 @@ namespace spiritsaway::utility
 		m_cell_load_report_counter++;
 		m_cell_loads[m_cell_load_report_counter % m_cell_loads.size()] = cur_load;
 		m_entity_loads = new_entity_loads;
+		make_sorted_loads();
 	}
 
+	void space_cells::cell_node::make_sorted_loads()
+	{
+		m_sorted_entity_load_idx_by_axis[0].resize(m_entity_loads.size(), 0);
+		m_sorted_entity_load_idx_by_axis[1].resize(m_entity_loads.size(), 0);
+		for (std::uint16_t i = 0; i < m_entity_loads.size(); i++)
+		{
+			m_sorted_entity_load_idx_by_axis[0][i] = i;
+			m_sorted_entity_load_idx_by_axis[1][i] = i;
+		}
+		std::sort(m_sorted_entity_load_idx_by_axis[0].begin(), m_sorted_entity_load_idx_by_axis[0].end(), [this](std::uint16_t a, std::uint16_t b)
+			{
+				return this->get_entity_loads()[a].pos.x < this->get_entity_loads()[b].pos.x;
+			});
+		std::sort(m_sorted_entity_load_idx_by_axis[1].begin(), m_sorted_entity_load_idx_by_axis[1].end(), [this](std::uint16_t a, std::uint16_t b)
+			{
+				return this->get_entity_loads()[a].pos.z < this->get_entity_loads()[b].pos.z;
+			});
+	}
 	space_cells::cell_node* space_cells::cell_node::split_x(double x, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id, const std::string& new_parent_space_id)
 	{
 		if(!is_leaf())
@@ -118,6 +175,7 @@ namespace spiritsaway::utility
 		m_children[master_child_index]->m_cell_loads[1] = get_latest_load();
 		m_children[master_child_index]->m_cell_load_report_counter = 1;
 		m_children[master_child_index]->m_entity_loads = std::move(m_entity_loads);
+		m_children[master_child_index]->m_sorted_entity_load_idx_by_axis = std::move(m_sorted_entity_load_idx_by_axis);
 		m_children[master_child_index]->set_ready();
 	}
 	space_cells::cell_node* space_cells::cell_node::split_z(double z, const std::string& new_space_game_id, const std::string& low_space_id, const std::string& high_space_id, const std::string& new_parent_space_id)
@@ -253,12 +311,14 @@ namespace spiritsaway::utility
 		{
 			m_game_id = m_children[0]->game_id();
 			m_entity_loads = std::move(m_children[0]->m_entity_loads);
+			m_sorted_entity_load_idx_by_axis = std::move(m_children[0]->m_sorted_entity_load_idx_by_axis);
 			m_cell_loads[1] = m_children[0]->get_latest_load();
 		}
 		else
 		{
 			m_game_id = m_children[1]->game_id();
 			m_entity_loads = std::move(m_children[1]->m_entity_loads);
+			m_sorted_entity_load_idx_by_axis = std::move(m_children[1]->m_sorted_entity_load_idx_by_axis);
 			m_cell_loads[1] = m_children[1]->get_latest_load();
 		}
 		m_ready = true;
@@ -271,8 +331,8 @@ namespace spiritsaway::utility
 	
 	std::string space_cells::merge_to_sibling(const std::string& space_id)
 	{
-		auto remove_node_iter = m_cells.find(space_id);
-		if(remove_node_iter == m_cells.end())
+		auto remove_node_iter = m_leaf_nodes.find(space_id);
+		if(remove_node_iter == m_leaf_nodes.end())
 		{
 			return {};
 		}
@@ -305,10 +365,11 @@ namespace spiritsaway::utility
 			return {};
 		}
 		std::string remove_node_game_id = remove_node->game_id();
+		m_internal_nodes.erase(cur_parent->space_id());
 		cur_parent->merge_to_child(sibling_node->space_id());
 		
-		m_cells.erase(remove_node_iter);
-		m_cells[space_id] = cur_parent;
+		m_leaf_nodes.erase(remove_node_iter);
+		m_leaf_nodes[space_id] = cur_parent;
 		return remove_node_game_id;
 	}
 	bool space_cells::check_valid_space_id(const std::string& space_id) const
@@ -326,8 +387,8 @@ namespace spiritsaway::utility
 		{
 			return nullptr;
 		}
-		auto dest_node_iter = m_cells.find(origin_space_id);
-		if(dest_node_iter == m_cells.end())
+		auto dest_node_iter = m_leaf_nodes.find(origin_space_id);
+		if(dest_node_iter == m_leaf_nodes.end())
 		{
 			return nullptr;
 		}
@@ -342,11 +403,12 @@ namespace spiritsaway::utility
 		{
 			return nullptr;
 		}
-		m_cells.erase(dest_node_iter);
+		m_leaf_nodes.erase(dest_node_iter);
 		for(auto one_child: dest_node->children())
 		{
-			m_cells[one_child->space_id()] = one_child;
+			m_leaf_nodes[one_child->space_id()] = one_child;
 		}
+		m_internal_nodes[dest_node->space_id()] = dest_node;
 		return result;
 		
 	}
@@ -357,8 +419,8 @@ namespace spiritsaway::utility
 		{
 			return nullptr;
 		}
-		auto dest_node_iter = m_cells.find(origin_space_id);
-		if(dest_node_iter == m_cells.end())
+		auto dest_node_iter = m_leaf_nodes.find(origin_space_id);
+		if(dest_node_iter == m_leaf_nodes.end())
 		{
 			return nullptr;
 		}
@@ -373,19 +435,20 @@ namespace spiritsaway::utility
 		{
 			return nullptr;
 		}
-		m_cells.erase(dest_node_iter);
+		m_leaf_nodes.erase(dest_node_iter);
 		for(auto one_child: dest_node->children())
 		{
-			m_cells[one_child->space_id()] = one_child;
+			m_leaf_nodes[one_child->space_id()] = one_child;
 		}
+		m_internal_nodes[dest_node->space_id()] = dest_node;
 		return result;
 		
 	}
 
-	std::vector<const space_cells::cell_node*> space_cells::query_intersect(const cell_bound& bound) const
+	std::vector<const space_cells::cell_node*> space_cells::query_intersect_leafs(const cell_bound& bound) const
 	{
 		std::vector<const cell_node*> temp_query_buffer;
-		temp_query_buffer.push_back(m_root_cell);
+		temp_query_buffer.push_back(m_root_node);
 		std::vector<const space_cells::cell_node*> result;
 		while(!temp_query_buffer.empty())
 		{
@@ -408,10 +471,10 @@ namespace spiritsaway::utility
 		return result;
 	}
 
-	const space_cells::cell_node* space_cells::query_point_region(double x, double z) const
+	const space_cells::cell_node* space_cells::query_leaf_for_point(double x, double z) const
 	{
 		std::vector<const cell_node*> temp_query_buffer;
-		temp_query_buffer.push_back(m_root_cell);
+		temp_query_buffer.push_back(m_root_node);
 		while(!temp_query_buffer.empty())
 		{
 			auto temp_top = temp_query_buffer.back();
@@ -447,7 +510,7 @@ namespace spiritsaway::utility
 		json::array_t cell_jsons;
 		cell_jsons.reserve(8);
 		std::vector<const cell_node*> temp_query_buffer;
-		temp_query_buffer.push_back(m_root_cell);
+		temp_query_buffer.push_back(m_root_node);
 		while(!temp_query_buffer.empty())
 		{
 			auto temp_top = temp_query_buffer.back();
@@ -479,11 +542,11 @@ namespace spiritsaway::utility
 		std::unordered_map<std::string, int> children_indexes;
 		bool temp_ready;
 		json::array_t cell_jsons;
-		m_cells.clear();
-		if (m_root_cell)
+		m_leaf_nodes.clear();
+		if (m_root_node)
 		{
-			delete m_root_cell;
-			m_root_cell = nullptr;
+			delete m_root_node;
+			m_root_node = nullptr;
 		}
 		try
 		{
@@ -511,8 +574,8 @@ namespace spiritsaway::utility
 
 				if(!parent_space_id.empty())
 				{
-					auto temp_iter = m_cells.find(parent_space_id);
-					if(temp_iter == m_cells.end())
+					auto temp_iter = m_leaf_nodes.find(parent_space_id);
+					if(temp_iter == m_leaf_nodes.end())
 					{
 						return false;
 					}
@@ -534,7 +597,8 @@ namespace spiritsaway::utility
 				{
 					new_node->set_ready();
 				}
-				m_cells[temp_space_id] = new_node;
+				new_node->make_sorted_loads();
+				m_leaf_nodes[temp_space_id] = new_node;
 				children_indexes[children_ids[0]] = 0;
 				children_indexes[children_ids[1]] = 1;
 				auto temp_iter = children_indexes.find(temp_space_id);
@@ -547,7 +611,7 @@ namespace spiritsaway::utility
 				}
 				if(parent_node == nullptr)
 				{
-					m_root_cell = new_node;
+					m_root_node = new_node;
 				}
 			}
 			catch(const std::exception& e)
@@ -562,8 +626,8 @@ namespace spiritsaway::utility
 	}
 	bool space_cells::balance(double split_v, const std::string& cell_id)
 	{
-		auto cur_node_iter = m_cells.find(cell_id);
-		if(cur_node_iter == m_cells.end())
+		auto cur_node_iter = m_leaf_nodes.find(cell_id);
+		if(cur_node_iter == m_leaf_nodes.end())
 		{
 			return false;
 		}
@@ -579,8 +643,8 @@ namespace spiritsaway::utility
 	std::vector<std::string> space_cells::all_child_space_except(const std::string& except_space) const
 	{
 		std::vector<std::string> result;
-		result.reserve(m_cells.size() /2 + 2);
-		for(const auto& one_cell: m_cells)
+		result.reserve(m_leaf_nodes.size() /2 + 2);
+		for(const auto& one_cell: m_leaf_nodes)
 		{
 			if(!one_cell.second->is_leaf())
 			{
@@ -597,8 +661,8 @@ namespace spiritsaway::utility
 
 	bool space_cells::set_ready(const std::string& cell_id)
 	{
-		auto cur_node_iter = m_cells.find(cell_id);
-		if(cur_node_iter == m_cells.end())
+		auto cur_node_iter = m_leaf_nodes.find(cell_id);
+		if(cur_node_iter == m_leaf_nodes.end())
 		{
 			return false;
 		}
@@ -608,18 +672,18 @@ namespace spiritsaway::utility
 
 	space_cells::~space_cells()
 	{
-		for(auto one_pair: m_cells)
+		for(auto one_pair: m_leaf_nodes)
 		{
 			delete one_pair.second;
 		}
-		m_cells.clear();
-		m_root_cell = nullptr;
+		m_leaf_nodes.clear();
+		m_root_node = nullptr;
 	}
 
 	void space_cells::update_cell_load(const std::string& cell_space_id, float cell_load, const std::vector<entity_load>& new_entity_loads)
 	{
-		auto cur_node_iter = m_cells.find(cell_space_id);
-		if(cur_node_iter == m_cells.end())
+		auto cur_node_iter = m_leaf_nodes.find(cell_space_id);
+		if(cur_node_iter == m_leaf_nodes.end())
 		{
 			return;
 		}
@@ -650,7 +714,7 @@ namespace spiritsaway::utility
 
 		int axis = 0; // 0 for x 1 for z
 		bool should_reverse = false;
-		float split_boundary = 0;
+		double split_boundary = 0;
 		if (is_x)
 		{
 			if (m_boundary.min.x < cur_sibling->boundary().min.x)
@@ -676,24 +740,16 @@ namespace spiritsaway::utility
 				split_boundary = m_boundary.min.z + 4 * ghost_radius;
 			}
 		}
-		
-		
-		auto sorted_entity_loads = m_entity_loads;
-		std::sort(sorted_entity_loads.begin(), sorted_entity_loads.end(), [axis](const entity_load& a, const entity_load& b)
-			{
-				return a.pos[axis] < b.pos[axis];
-			});
-		if (should_reverse)
-		{
-			std::reverse(sorted_entity_loads.begin(), sorted_entity_loads.end());
-		}
+		auto temp_sorted_indexes = vec_iter_wrapper(m_sorted_entity_load_idx_by_axis[is_x ? 0 : 1], should_reverse);
 		
 		float accumulated_load = 0;
-		double pre_split_candidate = sorted_entity_loads[0].pos[axis] - 100;
+		double pre_split_candidate = std::min(m_boundary.min.x, m_boundary.min.z) - 100;
 		
-
-		for (const auto& one_entity_load : sorted_entity_loads)
+		while(temp_sorted_indexes.valid())
 		{
+			auto one_entity_load_idx = temp_sorted_indexes.get_and_next();
+			const auto& one_entity_load = m_entity_loads[one_entity_load_idx];
+
 			if (one_entity_load.pos[axis] != pre_split_candidate)
 			{
 				bool boundary_check_result = true;
@@ -722,7 +778,7 @@ namespace spiritsaway::utility
 	const space_cells::cell_node* space_cells::get_best_cell_to_split(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param) const
 	{
 		const space_cells::cell_node* best_result = nullptr;
-		for (const auto& [one_cell_id, one_cell_node] : m_cells)
+		for (const auto& [one_cell_id, one_cell_node] : m_leaf_nodes)
 		{
 			if (!one_cell_node->is_leaf())
 			{
@@ -762,7 +818,7 @@ namespace spiritsaway::utility
 	const space_cells::cell_node* space_cells::get_best_cell_to_remove(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param)
 	{
 		const space_cells::cell_node* best_result = nullptr;
-		for (const auto& [one_cell_id, one_cell_node] : m_cells)
+		for (const auto& [one_cell_id, one_cell_node] : m_leaf_nodes)
 		{
 			if (!one_cell_node->is_leaf())
 			{
@@ -794,7 +850,7 @@ namespace spiritsaway::utility
 	const space_cells::cell_node* space_cells::get_best_cell_to_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param)
 	{
 		const space_cells::cell_node* best_result = nullptr;
-		for (const auto& [one_cell_id, one_cell_node] : m_cells)
+		for (const auto& [one_cell_id, one_cell_node] : m_leaf_nodes)
 		{
 			if (!one_cell_node->is_leaf())
 			{
@@ -864,17 +920,16 @@ namespace spiritsaway::utility
 		{
 			std::array<float, 4> split_gains;
 			std::fill(split_gains.begin(), split_gains.end(), 0);
-			auto entity_loads_copy = m_entity_loads;
+			
 			float temp_acc_loads = 0;
 			for (int i = 0; i < 1; i++)
 			{
-				std::sort(entity_loads_copy.begin(), entity_loads_copy.end(), [i](const entity_load& a, const entity_load& b)
-					{
-						return a.pos[i] < b.pos[i];
-					});
+				auto cur_sorted_load_idx_copy = vec_iter_wrapper(m_sorted_entity_load_idx_by_axis[i], false);
 
-				for (const auto& one_load : entity_loads_copy)
+				while (cur_sorted_load_idx_copy.valid())
 				{
+					auto one_index = cur_sorted_load_idx_copy.get_and_next();
+					const auto& one_load = m_entity_loads[one_index];
 					if (one_load.pos[i] > m_boundary.min[i] + 4 * ghost_radius)
 					{
 						break;
@@ -885,10 +940,14 @@ namespace spiritsaway::utility
 					}
 				}
 				split_gains[i*2] = temp_acc_loads;
-				std::reverse(entity_loads_copy.begin(), entity_loads_copy.end());
+				
 				temp_acc_loads = 0;
-				for (const auto& one_load : entity_loads_copy)
+				auto cur_sorted_load_idx_copy_reverse = vec_iter_wrapper(m_sorted_entity_load_idx_by_axis[i], true);
+
+				while (cur_sorted_load_idx_copy_reverse.valid())
 				{
+					auto one_index = cur_sorted_load_idx_copy_reverse.get_and_next();
+					const auto& one_load = m_entity_loads[one_index];
 					if (one_load.pos[i] + 4 * ghost_radius < m_boundary.max[i])
 					{
 						break;
@@ -942,8 +1001,8 @@ namespace spiritsaway::utility
 
 	const space_cells::cell_node* space_cells::split_at_direction(const std::string& origin_space_id, cell_split_direction split_direction, const std::string& new_space_id, const std::string& new_space_game_id)
 	{
-		auto cur_cell_iter = m_cells.find(origin_space_id);
-		if (cur_cell_iter == m_cells.end())
+		auto cur_cell_iter = m_leaf_nodes.find(origin_space_id);
+		if (cur_cell_iter == m_leaf_nodes.end())
 		{
 			return nullptr;
 		}
@@ -967,4 +1026,241 @@ namespace spiritsaway::utility
 		}
 
 	}
+
+	double space_cells::cell_node::calc_max_boundary_move_length(bool is_x, bool is_decreasing_max) const
+	{
+		auto cur_axis = is_x ? 0 : 1;
+		if (is_leaf())
+		{
+			return m_boundary.max[is_x] - m_boundary.min[is_x];
+		}
+		else
+		{
+			if (is_x)
+			{
+				if (m_is_split_x)
+				{
+					if (is_decreasing_max)
+					{
+						return m_children[1]->calc_max_boundary_move_length(is_x, is_decreasing_max);
+					}
+					else
+					{
+						return m_children[0]->calc_max_boundary_move_length(is_x, is_decreasing_max);
+					}
+					
+				}
+				else
+				{
+					return std::min(m_children[0]->calc_max_boundary_move_length(is_x, is_decreasing_max), m_children[1]->calc_max_boundary_move_length(is_x, is_decreasing_max));
+				}
+			}
+			else
+			{
+				if (m_is_split_x)
+				{
+					return std::min(m_children[0]->calc_max_boundary_move_length(is_x, is_decreasing_max), m_children[1]->calc_max_boundary_move_length(is_x, is_decreasing_max));
+					
+
+				}
+				else
+				{
+					if (is_decreasing_max)
+					{
+						return m_children[1]->calc_max_boundary_move_length(is_x, is_decreasing_max);
+					}
+					else
+					{
+						return m_children[0]->calc_max_boundary_move_length(is_x, is_decreasing_max);
+					}
+				}
+			}
+			
+		}
+		
+	}
+	void space_cells::cell_node::move_split_pos(double new_split_pos, bool is_x, bool is_decreasing_max)
+	{
+		auto cur_axis = is_x ? 0 : 1;
+		if (is_leaf())
+		{
+			if (is_decreasing_max)
+			{
+				m_boundary.max[cur_axis] = std::min(m_boundary.max[cur_axis], new_split_pos);
+			}
+			else
+			{
+				m_boundary.min[cur_axis] = std::max(m_boundary.min[cur_axis], new_split_pos);
+			}
+		}
+		else
+		{
+			if (is_x)
+			{
+				if (m_is_split_x)
+				{
+					if (is_decreasing_max)
+					{
+						return m_children[1]->move_split_pos(new_split_pos, is_x, is_decreasing_max);
+					}
+					else
+					{
+						return m_children[0]->move_split_pos(new_split_pos, is_x, is_decreasing_max);
+					}
+
+				}
+				else
+				{
+					m_children[1]->move_split_pos(new_split_pos, is_x, is_decreasing_max);
+					m_children[0]->move_split_pos(new_split_pos, is_x, is_decreasing_max);
+				}
+			}
+			else
+			{
+				if (m_is_split_x)
+				{
+					m_children[1]->move_split_pos(new_split_pos, is_x, is_decreasing_max);
+					m_children[0]->move_split_pos(new_split_pos, is_x, is_decreasing_max);
+
+
+				}
+				else
+				{
+					if (is_decreasing_max)
+					{
+						return m_children[1]->move_split_pos(new_split_pos, is_x, is_decreasing_max);
+					}
+					else
+					{
+						return m_children[0]->move_split_pos(new_split_pos, is_x, is_decreasing_max);
+					}
+				}
+			}
+
+		}
+	}
+	double space_cells::calc_max_shrink_length(const cell_node* shrink_node) const
+	{
+		auto cur_parent = shrink_node->parent();
+		if (!cur_parent)
+		{
+			return -4*m_ghost_radius;
+		}
+		else
+		{
+			if (cur_parent->is_split_x())
+			{
+				if (shrink_node == cur_parent->children()[0])
+				{
+					return shrink_node->calc_max_boundary_move_length(true, false) - 4 * m_ghost_radius;
+				}
+				else
+				{
+					return shrink_node->calc_max_boundary_move_length(true, true) - 4 * m_ghost_radius;
+				}
+			}
+			else
+			{
+				if (shrink_node == cur_parent->children()[0])
+				{
+					return shrink_node->calc_max_boundary_move_length(false, false) - 4 * m_ghost_radius;
+				}
+				else
+				{
+					return shrink_node->calc_max_boundary_move_length(false, true) - 4 * m_ghost_radius;
+				}
+			}
+		}
+	}
+
+	bool space_cells::balance(double split_v, const space_cells::cell_node* cur_node)
+	{
+		if (!cur_node || cur_node->is_leaf())
+		{
+			return false;
+		}
+		double pre_split_pos = cur_node->m_children[0]->boundary().max.x;
+		if (!cur_node->is_split_x())
+		{
+			pre_split_pos = cur_node->m_children[0]->boundary().max.z;
+		}
+		auto mutable_cur_node = m_internal_nodes[cur_node->space_id()];
+		assert(mutable_cur_node);
+		mutable_cur_node->children()[0]->move_split_pos(split_v, cur_node->is_split_x(), split_v < pre_split_pos);
+		mutable_cur_node->children()[1]->move_split_pos(split_v, cur_node->is_split_x(), split_v > pre_split_pos);
+		return true;
+	}
+
+	float space_cells::cell_node::calc_move_split_offload(double new_split_pos, bool is_x, bool is_decreasing_max) const
+	{
+		auto cur_axis = is_x ? 0 : 1;
+		if (is_leaf())
+		{
+			auto cur_sorted_load_idx_copy = vec_iter_wrapper(m_sorted_entity_load_idx_by_axis[cur_axis], is_decreasing_max);
+			
+			float temp_gain = 0;
+			while (cur_sorted_load_idx_copy.valid())
+			{
+				auto one_index = cur_sorted_load_idx_copy.get_and_next();
+				if (is_decreasing_max)
+				{
+					if (m_entity_loads[one_index].pos[cur_axis] < new_split_pos)
+					{
+						break;
+					}
+				}
+				else
+				{
+					if (m_entity_loads[one_index].pos[cur_axis] > new_split_pos)
+					{
+						break;
+					}
+				}
+				temp_gain += m_entity_loads[one_index].load;
+			}
+			return temp_gain;
+		}
+		else
+		{
+			if (is_x)
+			{
+				if (m_is_split_x)
+				{
+					if (is_decreasing_max)
+					{
+						return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_decreasing_max);
+					}
+					else
+					{
+						return m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_decreasing_max);
+					}
+
+				}
+				else
+				{
+					return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_decreasing_max) + m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_decreasing_max);
+				}
+			}
+			else
+			{
+				if (m_is_split_x)
+				{
+					return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_decreasing_max) + m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_decreasing_max);
+				}
+				else
+				{
+					if (is_decreasing_max)
+					{
+						return m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_decreasing_max);
+					}
+					else
+					{
+						return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_decreasing_max);
+					}
+				}
+			}
+
+		}
+	}
+
 }

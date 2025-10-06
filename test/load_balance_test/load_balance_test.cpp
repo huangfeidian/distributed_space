@@ -69,7 +69,7 @@ std::vector<point_xz> generate_random_points(const cell_bound& cur_boundary, int
 std::unordered_map<std::string, point_xz> generate_random_entity_load(space_cells& cur_space, int num)
 {
 	std::unordered_map<std::string, point_xz> result;
-	auto cur_boundary = cur_space.root_cell()->boundary();
+	auto cur_boundary = cur_space.root_node()->boundary();
 	auto temp_random_points = generate_random_points(cur_boundary, num);
 	for (int i = 0; i < temp_random_points.size(); i++)
 	{
@@ -90,10 +90,10 @@ std::unordered_map<std::string, point_xz> generate_random_entity_load(space_cell
 	std::vector<const space_cells::cell_node*> real_cells_for_pos;
 	for (auto one_point : temp_random_points)
 	{
-		auto cur_real_cell = cur_space.query_point_region(one_point.x, one_point.z);
+		auto cur_real_cell = cur_space.query_leaf_for_point(one_point.x, one_point.z);
 		real_cells_for_pos.push_back(cur_real_cell);
 	}
-	for (const auto& [one_space_id, one_cell] : cur_space.all_cells())
+	for (const auto& [one_space_id, one_cell] : cur_space.all_leafs())
 	{
 		if (!one_cell->is_leaf())
 		{
@@ -135,7 +135,7 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 	std::unordered_map<std::string, std::string> entity_to_real_region;
 	std::unordered_map<std::string, std::vector<std::string>> region_real_entities;
 	std::unordered_map<std::string, float> result_game_loads;
-	for (const auto& [one_space_id, one_cell] : cur_space.all_cells())
+	for (const auto& [one_space_id, one_cell] : cur_space.all_leafs())
 	{
 		if (!one_cell->is_leaf())
 		{
@@ -150,7 +150,7 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 				if (!one_cell->boundary().cover(one_entity_load.pos.x, one_entity_load.pos.z) && temp_migrate_num < max_cell_migrate_num)
 				{
 					temp_migrate_num++;
-					auto cur_real_cell = cur_space.query_point_region(one_entity_load.pos.x, one_entity_load.pos.z);
+					auto cur_real_cell = cur_space.query_leaf_for_point(one_entity_load.pos.x, one_entity_load.pos.z);
 					if (one_space_id == cur_real_cell->space_id())
 					{
 						logger->info("entity {} migrate from {} to {}", one_entity_load.name, one_cell->space_id(), cur_real_cell->space_id());
@@ -193,13 +193,13 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 		auto& cur_real_cell = entity_to_real_region[one_entity_id];
 		if (cur_real_cell.empty()) // 对应一些被remove的节点的entity
 		{
-			cur_real_cell = cur_space.query_point_region(one_point.x, one_point.z)->space_id();
+			cur_real_cell = cur_space.query_leaf_for_point(one_point.x, one_point.z)->space_id();
 			region_real_entities[cur_real_cell].push_back(one_entity_id);
 			logger->info("entity {} insert to {}", one_entity_id, cur_real_cell);
 		}
 		real_cells_for_pos.push_back(cur_real_cell);
 	}
-	for (const auto& [one_space_id, one_cell] : cur_space.all_cells())
+	for (const auto& [one_space_id, one_cell] : cur_space.all_leafs())
 	{
 		if (!one_cell->is_leaf())
 		{
@@ -244,7 +244,7 @@ std::string choose_min_load_game(const std::unordered_map<std::string, float>& g
 		return {};
 	}
 	std::unordered_set<std::string> used_games;
-	for (const auto& [one_cell_id, one_cell_ptr] : cur_space.all_cells())
+	for (const auto& [one_cell_id, one_cell_ptr] : cur_space.all_leafs())
 	{
 		used_games.insert(one_cell_ptr->game_id());
 	}
@@ -307,7 +307,7 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 		auto cur_sibling_id = cur_remove_node->sibling()->space_id();
 
 		cur_space.merge_to_sibling(cur_remove_node->space_id());
-		auto cur_sibling_node = cur_space.get_cell(cur_sibling_id);
+		auto cur_sibling_node = cur_space.get_leaf(cur_sibling_id);
 		cur_logger->info("space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
 	}
 }

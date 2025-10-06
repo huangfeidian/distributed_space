@@ -54,14 +54,14 @@ namespace spiritsaway::utility
 	struct cell_load_balance_param
 	{
 		float max_cell_load_when_remove; // 在考虑remove时 一个cell的最大负载
-		int min_cell_load_report_counter_when_remove; // 在考虑remove时 一个cell的最小负载汇报次数
+		std::uint32_t min_cell_load_report_counter_when_remove; // 在考虑remove时 一个cell的最小负载汇报次数
 
 		float min_cell_load_when_shrink; // 在shrink时 当前cell的load 的最小阈值
-		int min_cell_load_report_counter_when_shrink; // 在考虑shrink时 一个cell的最小负载汇报次数
+		std::uint32_t min_cell_load_report_counter_when_shrink; // 在考虑shrink时 一个cell的最小负载汇报次数
 		float max_sibling_cell_load_when_shrink; // 在shrink时 兄弟节点cell的最大负载
 		float min_game_load_when_split; // 在split时 当前cell所在game的最小负载
 		float min_cell_load_when_split; // 在split时 当前cell的最小load
-		int min_cell_load_report_counter_when_split; // 在考虑split时 一个cell的最小负载汇报次数
+		std::uint32_t min_cell_load_report_counter_when_split; // 在考虑split时 一个cell的最小负载汇报次数
 
 		float load_to_offset; // 在考虑shrink的时候 每次缩小的load
 	};
@@ -112,6 +112,7 @@ namespace spiritsaway::utility
 			bool m_is_split_x = false;
 			std::array<float, 4> m_cell_loads;
 			std::vector<entity_load> m_entity_loads;
+			std::array<std::vector<std::uint16_t>,2> m_sorted_entity_load_idx_by_axis; // 存储m_entity_load数组的索引 使得这个数组对应的元素的pos按照坐标轴升序排列
 			std::uint32_t m_cell_load_report_counter = 0; // 汇报负载的次数 每次boundary改变之后都要重置为0
 			
 		public:
@@ -189,16 +190,29 @@ namespace spiritsaway::utility
 			// 计算split时的最佳分割方向
 			cell_split_direction calc_best_split_direction(float ghost_radius) const;
 
+			// 计算当前节点的某个边界朝指定方向移动移动时的最大长度
+			// 要求移动后任意子节点仍然有面积 这里暂时不考虑ghost_radius
+
+			double calc_max_boundary_move_length(bool is_x, bool is_decreasing_max) const;
+
+			// 递归的移动当前区域的某个边界 is_x代表坐标轴 is_decreasing_max代表是缩小还是放大
+			void move_split_pos(double new_split_pos, bool is_x, bool is_decreasing_max);
+
+			// 计算在以这个新的分割轴进行分割的时候 能够缩小的entity_load总和
+			float calc_move_split_offload(double new_split_pos, bool is_x, bool is_decreasing_max) const;
 		private:
 			bool set_child(int index, cell_node* new_child);
 			void set_ready();
 			void on_split(int master_child_index);
+			void make_sorted_loads();
 			friend class space_cells;
 			
 		};
 	private:
-		std::unordered_map<std::string, cell_node*> m_cells;
-		cell_node* m_root_cell;
+		std::unordered_map<std::string, cell_node*> m_leaf_nodes;
+		std::unordered_map<std::string, cell_node*> m_internal_nodes;
+		// split与merge不会影响root_node
+		cell_node* m_root_node;
 		std::uint64_t m_temp_node_counter = 0;
 		// master 代表主逻辑cell 这个cell的生命周期伴随着整个space的生命周期
 		// space的主体逻辑由master cell控制
@@ -230,6 +244,12 @@ namespace spiritsaway::utility
 		const cell_node* get_best_cell_to_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
 
 		// TODO 增加调整内部节点边界的方式
+
+		// 计算一个节点 最大可能的shrink大小 这个节点可以是内部节点
+		// shrink后需要保证里面所有的叶子节点的长宽都要有4*ghost_radius
+		double calc_max_shrink_length(const cell_node* shrink_node) const;
+
+		
 	public:
 		
 		space_cells(const cell_bound& bound, const std::string& game_id, const std::string& space_id, const double in_ghost_radius);
@@ -238,20 +258,23 @@ namespace spiritsaway::utility
 		const cell_node* split_at_direction(const std::string& origin_space_id, cell_split_direction split_direction, const std::string& new_space_id, const std::string& new_space_game_id);
 		// 将cell_id对应的cell 与其兄弟节点的分界线调整为split_v
 		bool balance(double split_v, const std::string& cell_id);
+
+		// 将某个内部节点的分割线移动到split_v
+		bool balance(double split_v, const cell_node* cur_node);
 		// 将space_id对应节点合并到space_id对应兄弟节点
 		// 返回对应要删除node的game_id
 		// 失败的情况下返回值都是空
 		std::string merge_to_sibling(const std::string& space_id);
-		std::vector<const cell_node*> query_intersect(const cell_bound& bound) const;
-		const cell_node* query_point_region(double x, double z) const;
+		std::vector<const cell_node*> query_intersect_leafs(const cell_bound& bound) const;
+		const cell_node* query_leaf_for_point(double x, double z) const;
 		const std::unordered_map<std::string, cell_node*>& cells() const
 		{
-			return m_cells;
+			return m_leaf_nodes;
 		}
-		const cell_node* get_cell(const std::string& cell_id) const
+		const cell_node* get_leaf(const std::string& cell_id) const
 		{
-			auto cur_iter = m_cells.find(cell_id);
-			if(cur_iter == m_cells.end())
+			auto cur_iter = m_leaf_nodes.find(cell_id);
+			if(cur_iter == m_leaf_nodes.end())
 			{
 				return nullptr;
 			}
@@ -260,13 +283,14 @@ namespace spiritsaway::utility
 				return cur_iter->second;
 			}
 		}
-		const cell_node* root_cell() const
+
+		const cell_node* root_node() const
 		{
-			return m_root_cell;
+			return m_root_node;
 		}
-		const auto& all_cells() const
+		const auto& all_leafs() const
 		{
-			return m_cells;
+			return m_leaf_nodes;
 		}
 		auto ghost_radius() const
 		{
