@@ -291,7 +291,8 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 		{
 			auto new_space_id = "space" + std::to_string(iteration);
 			cur_logger->info("{} boundary {} split_at_direction {} new_space_id {} best_game {}", cur_split_node->space_id(), json(cur_split_node->boundary()).dump(), int(cur_split_direction), new_space_id, cur_best_game);
-			auto new_space_node = cur_space.split_at_direction(cur_split_node->space_id(), cur_split_direction, new_space_id, cur_best_game);
+			auto cur_split_space_id = cur_split_node->space_id();
+			auto new_space_node = cur_space.split_at_direction(cur_split_space_id, cur_split_direction, new_space_id, cur_best_game);
 			auto sibling_node = new_space_node->sibling();
 			cur_logger->info("space {} has boundary {}", sibling_node->space_id(), json(sibling_node->boundary()).dump());
 			cur_logger->info("space {} has boundary {}", new_space_node->space_id(), json(new_space_node->boundary()).dump());
@@ -304,14 +305,15 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 	if (cur_remove_node)
 	{
 		auto cur_sibling_id = cur_remove_node->sibling()->space_id();
-
-		cur_space.merge_to_sibling(cur_remove_node->space_id());
+		auto cur_remove_space_id = cur_remove_node->space_id();
+		cur_logger->info("remove space {}", cur_remove_space_id);
+		cur_space.merge_to_sibling(cur_remove_space_id);
 		auto cur_sibling_node = cur_space.get_leaf(cur_sibling_id);
 		cur_logger->info("space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
 	}
 }
 
-// 基础的等待负载均衡到达稳态
+// 基础的等待负载 split并均衡到达稳态
 void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
 {
 	cell_bound temp_bound;
@@ -441,6 +443,199 @@ void lb_case_2(const space_draw_config& draw_config, const std::string& dest_dir
 
 }
 
+// 均衡划分 然后删除一些entity 等待均衡
+void lb_case_3(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
+{
+	cell_bound temp_bound;
+	temp_bound.min.x = -10000;
+	temp_bound.max.x = 15000;
+	temp_bound.min.z = 8000;
+	temp_bound.max.z = 17000;
+	cell_load_balance_param cur_lb_param;
+	cur_lb_param.load_to_offset = 10;
+	cur_lb_param.max_cell_load_when_remove = 6;
+	cur_lb_param.min_cell_load_report_counter_when_remove = 6;
+	cur_lb_param.min_cell_load_report_counter_when_shrink = 2;
+	cur_lb_param.min_cell_load_report_counter_when_split = 4;
+	cur_lb_param.min_cell_load_when_shrink = 20;
+	cur_lb_param.min_cell_load_when_split = 40;
+	cur_lb_param.min_game_load_when_split = 80;
+	cur_lb_param.min_sibling_game_load_diff_when_shrink = 15;
+
+	std::string root_space_id = "space1";
+	std::vector<std::string> games = { "game0", "game1", "game2", "game3", "game4" };
+	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
+	cur_space.set_ready(root_space_id);
+	// 预先划分为四个
+	cur_space.split_x(1000, "space1", "game1", "space1", "space2");
+	cur_space.set_ready("space2");
+	cur_space.split_z(12000, "space1", "game2", "space1", "space3");
+	cur_space.set_ready("space3");
+	cur_space.split_z(12000, "space2", "game3", "space4", "space2");
+	cur_space.set_ready("space4");
+
+	std::vector<point_xz> temp_random_points;
+	if (input_path.empty())
+	{
+		temp_random_points = generate_random_points(cur_space.root_node()->boundary(), 200);
+	}
+	else
+	{
+		auto input_point_json = load_json_file(input_path);
+		input_point_json.get_to(temp_random_points);
+	}
+
+	auto cur_entity_poses = generate_random_entity_load(cur_space, temp_random_points);
+	std::string cur_result_dir = dest_dir + "/lb_case3";
+	std::filesystem::create_directories(cur_result_dir);
+	dump_json_to_file(json(temp_random_points), cur_result_dir + "/" + "input_points.json");
+	draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_0");
+	dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_0" + ".json");
+	for (int i = 5; i < 20; i++)
+	{
+		logger->warn("iteration {}", i);
+		auto cur_game_loads = do_migrate(cur_space, 20, cur_entity_poses, logger);
+		for (const auto& one_game : games)
+		{
+			if (!cur_game_loads.count(one_game))
+			{
+				cur_game_loads[one_game] = 1.0;
+			}
+		}
+		logger->info("game_loads {}", json(cur_game_loads).dump());
+		cur_space.update_load_stat(cur_game_loads);
+		do_balance(cur_space, cur_lb_param, cur_game_loads, i, logger);
+		logger->info("balance finish");
+		draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_" + std::to_string(i + 1));
+		dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_" + std::to_string(i + 1) + ".json");
+	}
+	std::unordered_map<std::string, point_xz> entity_pos_copy;
+	for (const auto& one_entity : cur_entity_poses)
+	{
+		// 删除x轴小于0的
+		if (one_entity.second.x > 0)
+		{
+			entity_pos_copy[one_entity.first] = one_entity.second;
+		}
+	}
+	std::swap(entity_pos_copy, cur_entity_poses);
+	for (int i = 20; i < 40; i++)
+	{
+		logger->warn("iteration {}", i);
+		auto cur_game_loads = do_migrate(cur_space, 20, cur_entity_poses, logger);
+		for (const auto& one_game : games)
+		{
+			if (!cur_game_loads.count(one_game))
+			{
+				cur_game_loads[one_game] = 1.0;
+			}
+		}
+		logger->info("game_loads {}", json(cur_game_loads).dump());
+		cur_space.update_load_stat(cur_game_loads);
+		do_balance(cur_space, cur_lb_param, cur_game_loads, i, logger);
+		logger->info("balance finish");
+		draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_" + std::to_string(i + 1));
+		dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_" + std::to_string(i + 1) + ".json");
+	}
+}
+
+// 均衡划分 然后删除绝大部分entity 等待删除
+void lb_case_4(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
+{
+	cell_bound temp_bound;
+	temp_bound.min.x = -10000;
+	temp_bound.max.x = 15000;
+	temp_bound.min.z = 8000;
+	temp_bound.max.z = 17000;
+	cell_load_balance_param cur_lb_param;
+	cur_lb_param.load_to_offset = 10;
+	cur_lb_param.max_cell_load_when_remove = 20;
+	cur_lb_param.min_cell_load_report_counter_when_remove = 6;
+	cur_lb_param.min_cell_load_report_counter_when_shrink = 2;
+	cur_lb_param.min_cell_load_report_counter_when_split = 4;
+	cur_lb_param.min_cell_load_when_shrink = 20;
+	cur_lb_param.min_cell_load_when_split = 40;
+	cur_lb_param.min_game_load_when_split = 80;
+	cur_lb_param.min_sibling_game_load_diff_when_shrink = 15;
+
+	std::string root_space_id = "space1";
+	std::vector<std::string> games = { "game0", "game1", "game2", "game3", "game4" };
+	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
+	cur_space.set_ready(root_space_id);
+	// 预先划分为四个
+	cur_space.split_x(1000, "space1", "game1", "space1", "space2");
+	cur_space.set_ready("space2");
+	cur_space.split_z(12000, "space1", "game2", "space1", "space3");
+	cur_space.set_ready("space3");
+	cur_space.split_z(12000, "space2", "game3", "space4", "space2");
+	cur_space.set_ready("space4");
+
+	std::vector<point_xz> temp_random_points;
+	if (input_path.empty())
+	{
+		temp_random_points = generate_random_points(cur_space.root_node()->boundary(), 200);
+	}
+	else
+	{
+		auto input_point_json = load_json_file(input_path);
+		input_point_json.get_to(temp_random_points);
+	}
+
+	auto cur_entity_poses = generate_random_entity_load(cur_space, temp_random_points);
+	std::string cur_result_dir = dest_dir + "/lb_case4";
+	std::filesystem::create_directories(cur_result_dir);
+	dump_json_to_file(json(temp_random_points), cur_result_dir + "/" + "input_points.json");
+	draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_0");
+	dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_0" + ".json");
+	for (int i = 5; i < 10; i++)
+	{
+		logger->warn("iteration {}", i);
+		auto cur_game_loads = do_migrate(cur_space, 20, cur_entity_poses, logger);
+		for (const auto& one_game : games)
+		{
+			if (!cur_game_loads.count(one_game))
+			{
+				cur_game_loads[one_game] = 1.0;
+			}
+		}
+		logger->info("game_loads {}", json(cur_game_loads).dump());
+		cur_space.update_load_stat(cur_game_loads);
+		do_balance(cur_space, cur_lb_param, cur_game_loads, i, logger);
+		logger->info("balance finish");
+		draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_" + std::to_string(i + 1));
+		dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_" + std::to_string(i + 1) + ".json");
+	}
+	std::unordered_map<std::string, point_xz> entity_pos_copy;
+	for (const auto& one_entity : cur_entity_poses)
+	{
+		// 删除x轴小于0的
+		if (one_entity.second.x > 10000)
+		{
+			entity_pos_copy[one_entity.first] = one_entity.second;
+		}
+	}
+	std::swap(entity_pos_copy, cur_entity_poses);
+	for (int i = 10; i < 40; i++)
+	{
+		logger->warn("iteration {}", i);
+		auto cur_game_loads = do_migrate(cur_space, 20, cur_entity_poses, logger);
+		for (const auto& one_game : games)
+		{
+			if (!cur_game_loads.count(one_game))
+			{
+				cur_game_loads[one_game] = 1.0;
+			}
+		}
+		logger->info("game_loads {}", json(cur_game_loads).dump());
+		cur_space.update_load_stat(cur_game_loads);
+		do_balance(cur_space, cur_lb_param, cur_game_loads, i, logger);
+		logger->info("balance finish");
+		draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_" + std::to_string(i + 1));
+		dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_" + std::to_string(i + 1) + ".json");
+	}
+}
+
+
 
 int main(int argc, const char** argv)
 {
@@ -471,7 +666,11 @@ int main(int argc, const char** argv)
 	auto cur_logger = create_logger("load_balance");
 	//cur_logger->info("lb_case_1");
 	//lb_case_1(cur_draw_config, cur_folder_name, cur_logger, "");
-	cur_logger->info("lb_case_2");
-	lb_case_2(cur_draw_config, cur_folder_name, cur_logger, "");
+	//cur_logger->info("lb_case_2");
+	//lb_case_2(cur_draw_config, cur_folder_name, cur_logger, "");
+	//cur_logger->info("lb_case_3");
+	//lb_case_3(cur_draw_config, cur_folder_name, cur_logger, "");
+	cur_logger->info("lb_case_4");
+	lb_case_4(cur_draw_config, cur_folder_name, cur_logger, "");
 	return 1;
 }

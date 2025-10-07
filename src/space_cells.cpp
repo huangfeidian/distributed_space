@@ -345,7 +345,7 @@ namespace spiritsaway::utility
 		{
 			return {};
 		}
-		if (remove_node->game_id() == m_master_cell_id)
+		if (remove_node->space_id() == m_master_cell_id)
 		{
 			return {};
 		}
@@ -366,10 +366,12 @@ namespace spiritsaway::utility
 		}
 		std::string remove_node_game_id = remove_node->game_id();
 		m_internal_nodes.erase(cur_parent->space_id());
-		cur_parent->merge_to_child(sibling_node->space_id());
+		auto dest_space_id = sibling_node->space_id();
+		cur_parent->merge_to_child(dest_space_id);
 		
 		m_leaf_nodes.erase(remove_node_iter);
-		m_leaf_nodes[space_id] = cur_parent;
+		m_leaf_nodes.erase(dest_space_id);
+		m_leaf_nodes[dest_space_id] = cur_parent;
 		return remove_node_game_id;
 	}
 	bool space_cells::check_valid_space_id(const std::string& space_id) const
@@ -821,6 +823,10 @@ namespace spiritsaway::utility
 		for (const auto& [one_cell_id, one_cell_node] : m_leaf_nodes)
 		{
 			if (!one_cell_node->is_leaf())
+			{
+				continue;
+			}
+			if (one_cell_node->space_id() == m_master_cell_id)
 			{
 				continue;
 			}
