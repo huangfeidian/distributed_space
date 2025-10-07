@@ -58,11 +58,12 @@ namespace spiritsaway::utility
 
 		float min_cell_load_when_shrink; // 在shrink时 当前cell的load 的最小阈值
 		std::uint32_t min_cell_load_report_counter_when_shrink; // 在考虑shrink时 一个cell的最小负载汇报次数
-		float max_sibling_cell_load_when_shrink; // 在shrink时 兄弟节点cell的最大负载
+
+		float min_sibling_game_load_diff_when_shrink; // 在缩容时 当前节点的game平均负载起码要比邻居节点的平均game负载高这个值
 		float min_game_load_when_split; // 在split时 当前cell所在game的最小负载
 		float min_cell_load_when_split; // 在split时 当前cell的最小load
 		std::uint32_t min_cell_load_report_counter_when_split; // 在考虑split时 一个cell的最小负载汇报次数
-		float min_sibling_game_load_diff_when_shrink; // 在缩容时 当前节点的game平均负载起码要比邻居节点的平均game负载高这个值
+		
 		float load_to_offset; // 在考虑shrink的时候 每次缩小的load
 	};
 	struct entity_load

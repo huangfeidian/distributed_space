@@ -886,7 +886,7 @@ namespace spiritsaway::utility
 	{
 		for (auto one_child : m_children)
 		{
-			if (one_child && one_child->check_can_shrink(game_loads, lb_param, ghost_radius))
+			if (one_child)
 			{
 				auto cur_child_result = one_child->calc_shrink_node(game_loads, lb_param, ghost_radius);
 				if (cur_child_result)
@@ -1298,12 +1298,13 @@ namespace spiritsaway::utility
 			if (temp_game_iter == game_loads.end())
 			{
 				m_total_game_load = 0;
-				m_child_games.push_back(m_game_id);
 			}
 			else
 			{
 				m_total_game_load = temp_game_iter->second;
 			}
+			m_child_games.clear();
+			m_child_leaf.clear();
 			m_child_games.push_back(m_game_id);
 			m_child_leaf.push_back(this);
 			

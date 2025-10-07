@@ -66,11 +66,11 @@ std::vector<point_xz> generate_random_points(const cell_bound& cur_boundary, int
 	return result;
 }
 
-std::unordered_map<std::string, point_xz> generate_random_entity_load(space_cells& cur_space, int num)
+std::unordered_map<std::string, point_xz> generate_random_entity_load(space_cells& cur_space, const std::vector<point_xz>& temp_random_points)
 {
 	std::unordered_map<std::string, point_xz> result;
 	auto cur_boundary = cur_space.root_node()->boundary();
-	auto temp_random_points = generate_random_points(cur_boundary, num);
+	
 	for (int i = 0; i < temp_random_points.size(); i++)
 	{
 		result[std::to_string(i)] = temp_random_points[i];
@@ -266,6 +266,22 @@ std::string choose_min_load_game(const std::unordered_map<std::string, float>& g
 }
 void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param, const std::unordered_map<std::string, float>& game_loads, int iteration, std::shared_ptr<spdlog::logger> cur_logger)
 {
+	auto cur_shrink_node = cur_space.get_best_node_to_shrink(game_loads, lb_param);
+	if (cur_shrink_node)
+	{
+		double out_split_axis = cur_shrink_node->calc_best_shrink_new_split_pos(lb_param, cur_space.ghost_radius());
+		auto cur_sibling_node = cur_shrink_node->sibling();
+		cur_logger->info("{} balance at {} ", cur_shrink_node->space_id(), out_split_axis);
+		cur_logger->info("before balance space {} has boundary {}", cur_shrink_node->space_id(), json(cur_shrink_node->boundary()).dump());
+		cur_logger->info("before balance space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+
+		cur_space.balance(out_split_axis, cur_shrink_node->parent());
+
+		cur_logger->info("after balance space {} has boundary {}", cur_shrink_node->space_id(), json(cur_shrink_node->boundary()).dump());
+
+		cur_logger->info("after balance space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+		return;
+	}
 	auto cur_split_node = cur_space.get_best_cell_to_split(game_loads, lb_param);
 	if (cur_split_node)
 	{
@@ -283,22 +299,7 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 			return;
 		}
 	}
-	auto cur_shrink_node = cur_space.get_best_node_to_shrink(game_loads, lb_param);
-	if (cur_shrink_node)
-	{
-		double out_split_axis = cur_shrink_node->calc_best_shrink_new_split_pos(lb_param, cur_space.ghost_radius());
-		auto cur_sibling_node = cur_shrink_node->sibling();
-		cur_logger->info("{} balance at {} ", cur_shrink_node->space_id(), out_split_axis);
-		cur_logger->info("before balance space {} has boundary {}", cur_shrink_node->space_id(), json(cur_shrink_node->boundary()).dump());
-		cur_logger->info("before balance space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
-
-		cur_space.balance(out_split_axis, cur_shrink_node->parent());
-		
-		cur_logger->info("after balance space {} has boundary {}", cur_shrink_node->space_id(), json(cur_shrink_node->boundary()).dump());
-		
-		cur_logger->info("after balance space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
-		return;
-	}
+	
 	auto cur_remove_node = cur_space.get_best_cell_to_remove(game_loads, lb_param);
 	if (cur_remove_node)
 	{
@@ -309,7 +310,7 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 		cur_logger->info("space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
 	}
 }
-void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger)
+void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
 {
 	cell_bound temp_bound;
 	temp_bound.min.x = -10000;
@@ -322,18 +323,30 @@ void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir
 	cur_lb_param.min_cell_load_report_counter_when_remove = 10;
 	cur_lb_param.min_cell_load_report_counter_when_shrink = 2;
 	cur_lb_param.min_cell_load_report_counter_when_split = 4;
-	cur_lb_param.max_sibling_cell_load_when_shrink = 75;
 	cur_lb_param.min_cell_load_when_shrink = 20;
 	cur_lb_param.min_cell_load_when_split = 40;
 	cur_lb_param.min_game_load_when_split = 80;
+	cur_lb_param.min_sibling_game_load_diff_when_shrink = 20;
 	
 	std::string root_space_id = "space1";
 	std::vector<std::string> games = { "game1", "game2", "game3", "game4" };
 	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
 	cur_space.set_ready(root_space_id);
-	auto cur_entity_poses = generate_random_entity_load(cur_space, 200);
+	std::vector<point_xz> temp_random_points;
+	if (input_path.empty())
+	{
+		temp_random_points = generate_random_points(cur_space.root_node()->boundary(), 200);
+	}
+	else
+	{
+		auto input_point_json = load_json_file(input_path);
+		input_point_json.get_to(temp_random_points);
+	}
+	
+	auto cur_entity_poses = generate_random_entity_load(cur_space, temp_random_points);
 	std::string cur_result_dir = dest_dir + "/lb_case1";
 	std::filesystem::create_directories(cur_result_dir);
+	dump_json_to_file(json(temp_random_points), cur_result_dir + "/" + "input_points.json");
 	draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_0");
 	dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_0" + ".json");
 	for (int i = 0; i < 40; i++)
@@ -385,6 +398,6 @@ int main(int argc, const char** argv)
 	auto cur_folder_name = "dump_space_" + format_timepoint(microsecondsUTC);
 	auto cur_logger = create_logger("load_balance");
 	cur_logger->info("lb_case_1");
-	lb_case_1(cur_draw_config, cur_folder_name, cur_logger);
+	lb_case_1(cur_draw_config, cur_folder_name, cur_logger, "./dump_space_2025_10_07_19_53_38/lb_case1/input_points.json");
 	return 1;
 }
