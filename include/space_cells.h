@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
-namespace spiritsaway::utility
+namespace spiritsaway::distributed_space
 {
 	struct point_xz
 	{
@@ -101,14 +101,14 @@ namespace spiritsaway::utility
 	public:
 		
 	public:
-		class cell_node
+		class space_node
 		{
 		private:
 			std::string m_space_id;
 			std::string m_game_id;
 			cell_bound m_boundary; // boundary的长宽都需要大于四倍的ghost_radius
-			std::array<cell_node*, 2> m_children;
-			cell_node* m_parent = nullptr;
+			std::array<space_node*, 2> m_children;
+			space_node* m_parent = nullptr;
 			bool m_ready = false;
 			bool m_is_split_x = false;
 			std::array<float, 4> m_cell_loads;
@@ -118,24 +118,24 @@ namespace spiritsaway::utility
 		private:
 			float m_total_cell_load; // 当前节点所有叶子节点的load总和
 			float m_total_game_load; // 当前节点所有叶子节点的的game load总和
-			std::vector<const cell_node*> m_child_leaf;
+			std::vector<const space_node*> m_child_leaf;
 			std::vector<std::string> m_child_games;
 			std::uint32_t m_min_cell_load_report_counter;
 		public:
-			cell_node(const cell_bound& in_bound, const std::string& in_game_id, const std::string& in_space_id, cell_node* in_parent)
+			space_node(const cell_bound& in_bound, const std::string& in_game_id, const std::string& in_space_id, space_node* in_parent)
 			: m_space_id(in_space_id)
 			, m_game_id(in_game_id)
 			, m_boundary(in_bound)
 			, m_children{nullptr, nullptr}
 			, m_parent(in_parent)
 			{
-				std::fill(m_cell_loads.begin(), m_cell_loads.end(), 0);
+				std::fill(m_cell_loads.begin(), m_cell_loads.end(), 0.0f);
 			}
-			cell_node* split_x(double x, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id, const std::string& new_parent_space_id);
-			cell_node* split_z(double z, const std::string& new_space_game_id, const std::string& low_space_id, const std::string& up_space_id, const std::string& new_parent_space_id);
+			space_node* split_x(double x, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id, const std::string& new_parent_space_id);
+			space_node* split_z(double z, const std::string& new_space_game_id, const std::string& low_space_id, const std::string& up_space_id, const std::string& new_parent_space_id);
 			// 将两个子节点的分界线调整为split_v
 			bool balance(double split_v);
-			bool is_leaf() const
+			bool is_leaf_cell() const
 			{
 				return !m_children[0];
 			}
@@ -165,17 +165,17 @@ namespace spiritsaway::utility
 			{
 				return m_boundary;
 			}
-			const std::array<cell_node*, 2>& children() const
+			const std::array<space_node*, 2>& children() const
 			{
 				return m_children;
 			}
-			const cell_node* sibling() const;
+			const space_node* sibling() const;
 
-			cell_node* parent()
+			space_node* parent()
 			{
 				return m_parent;
 			}
-			const cell_node* parent() const
+			const space_node* parent() const
 			{
 				return m_parent;
 			}
@@ -210,11 +210,11 @@ namespace spiritsaway::utility
 
 			bool check_can_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param, const double ghost_radius) const;
 
-			const cell_node* calc_shrink_node(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param, const double ghost_radius) const;
+			const space_node* calc_shrink_node(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param, const double ghost_radius) const;
 
 			double calc_best_shrink_new_split_pos(const cell_load_balance_param& lb_param, const double ghost_radius) const;
 		private:
-			bool set_child(int index, cell_node* new_child);
+			bool set_child(int index, space_node* new_child);
 			void set_ready();
 			void on_split(int master_child_index);
 			void make_sorted_loads();
@@ -222,10 +222,10 @@ namespace spiritsaway::utility
 			void update_load_stat(const std::unordered_map<std::string, float>& game_loads);
 		};
 	private:
-		std::unordered_map<std::string, cell_node*> m_leaf_nodes;
-		std::unordered_map<std::string, cell_node*> m_internal_nodes;
+		std::unordered_map<std::string, space_node*> m_leaf_nodes;
+		std::unordered_map<std::string, space_node*> m_internal_nodes;
 		// split与merge不会影响root_node
-		cell_node* m_root_node;
+		space_node* m_root_node;
 		std::uint64_t m_temp_node_counter = 0;
 		// master 代表主逻辑cell 这个cell的生命周期伴随着整个space的生命周期
 		// space的主体逻辑由master cell控制
@@ -242,51 +242,51 @@ namespace spiritsaway::utility
 		// 2. 这个cell的load要大于指定阈值
 		// 3. 长和宽至少有一个要大于8倍的ghost_radius 这样才能保证分割后的两个cell都有4倍radius
 		// 选取cell load最大的
-		const cell_node* get_best_cell_to_split(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param) const;
+		const space_node* get_best_cell_to_split(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param) const;
 		~space_cells();
 
 		// 选择一个合适的cell来删除 删除要求
 		// 1. 这个cell的负载要小于指定阈值 max_cell_load
 		// 2. 选取其中 cell load最小的
-		const cell_node* get_best_cell_to_remove(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
+		const space_node* get_best_cell_to_remove(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
 
 		// 选择一个合适的node来缩容
 		// 1. 这个node的平均game负载起码要大于指定阈值
 		// 2. 这个node的平均game 负载起码要比其兄弟节点的平均负载大于指定阈值
 		// 3. 这个cell的负载转移到兄弟节点之后 兄弟节点game的平均load 不能比当前game的平均load高
 		// 优先选取底部节点
-		const cell_node* get_best_node_to_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
+		const space_node* get_best_node_to_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
 
 		
 
 		// 计算一个节点 最大可能的shrink大小 这个节点可以是内部节点
 		// shrink后需要保证里面所有的叶子节点的长宽都要有4*ghost_radius
-		double calc_max_shrink_length(const cell_node* shrink_node) const;
+		double calc_max_shrink_length(const space_node* shrink_node) const;
 
 
 		
 	public:
 		
 		space_cells(const cell_bound& bound, const std::string& game_id, const std::string& space_id, const double in_ghost_radius);
-		const cell_node* split_x(double x, const std::string& origin_space_id, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id);
-		const cell_node* split_z(double z, const std::string& origin_space_id, const std::string& new_space_game_id,const std::string& low_space_id, const std::string& high_space_id);
-		const cell_node* split_at_direction(const std::string& origin_space_id, cell_split_direction split_direction, const std::string& new_space_id, const std::string& new_space_game_id);
+		const space_node* split_x(double x, const std::string& origin_space_id, const std::string& new_space_game_id, const std::string& left_space_id, const std::string& right_space_id);
+		const space_node* split_z(double z, const std::string& origin_space_id, const std::string& new_space_game_id,const std::string& low_space_id, const std::string& high_space_id);
+		const space_node* split_at_direction(const std::string& origin_space_id, cell_split_direction split_direction, const std::string& new_space_id, const std::string& new_space_game_id);
 		// 将cell_id对应的cell 与其兄弟节点的分界线调整为split_v
 		bool balance(double split_v, const std::string& cell_id);
 
 		// 将某个内部节点的分割线移动到split_v
-		bool balance(double split_v, const cell_node* cur_node);
+		bool balance(double split_v, const space_node* cur_node);
 		// 将space_id对应节点合并到space_id对应兄弟节点
 		// 返回对应要删除node的game_id
 		// 失败的情况下返回值都是空
 		std::string merge_to_sibling(const std::string& space_id);
-		std::vector<const cell_node*> query_intersect_leafs(const cell_bound& bound) const;
-		const cell_node* query_leaf_for_point(double x, double z) const;
-		const std::unordered_map<std::string, cell_node*>& cells() const
+		std::vector<const space_node*> query_intersect_leafs(const cell_bound& bound) const;
+		const space_node* query_leaf_for_point(double x, double z) const;
+		const std::unordered_map<std::string, space_node*>& cells() const
 		{
 			return m_leaf_nodes;
 		}
-		const cell_node* get_leaf(const std::string& cell_id) const
+		const space_node* get_leaf(const std::string& cell_id) const
 		{
 			auto cur_iter = m_leaf_nodes.find(cell_id);
 			if(cur_iter == m_leaf_nodes.end())
@@ -299,7 +299,7 @@ namespace spiritsaway::utility
 			}
 		}
 
-		const cell_node* root_node() const
+		const space_node* root_node() const
 		{
 			return m_root_node;
 		}

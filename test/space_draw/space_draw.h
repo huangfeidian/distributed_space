@@ -52,4 +52,4 @@ struct space_draw_config
 
 json load_json_file(const std::string& file_path);
 
-void draw_cell_region(const spiritsaway::utility::space_cells& cur_cell_region, const space_draw_config& draw_config, const std::string& folder_path, const std::string& file_name_prefix);
+void draw_cell_region(const spiritsaway::distributed_space::space_cells& cur_cell_region, const space_draw_config& draw_config, const std::string& folder_path, const std::string& file_name_prefix);

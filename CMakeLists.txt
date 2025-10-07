@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(space_split LANGUAGES CXX)
+project(distributed_space LANGUAGES CXX)
 
 
 set(CMAKE_CXX_STANDARD 17)
@@ -10,6 +10,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest /bigobj")
 endif(MSVC)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+option(WITH_TEST "add test subdirectory" OFF)
 
 find_package(nlohmann_json CONFIG REQUIRED)
 
@@ -58,6 +59,8 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION include/${PRO
 install(EXPORT ${PROJECT_NAME}Targets
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
 
+if(WITH_TEST)
 add_subdirectory(test)
+endif(WITH_TEST)
 
 endif(IS_TOPLEVEL_PROJECT)

@@ -257,17 +257,17 @@ void space_draw_container::calc_agents()
 	}
 }
 
-void space_draw_container::calc_split_lines(const spiritsaway::utility::space_cells& cur_cell_region)
+void space_draw_container::calc_split_lines(const spiritsaway::distributed_space::space_cells& cur_cell_region)
 {
 	auto cur_root_node = cur_cell_region.root_node();
-	std::vector<const spiritsaway::utility::space_cells::cell_node*> process_queue;
+	std::vector<const spiritsaway::distributed_space::space_cells::space_node*> process_queue;
 	process_queue.push_back(cur_root_node);
 	while (!process_queue.empty())
 	{
 		auto cur_top = process_queue.back();
 		process_queue.pop_back();
 		std::string result_caption;
-		if (!cur_top->is_leaf())
+		if (!cur_top->is_leaf_cell())
 		{
 			auto cur_child_aabb = cur_top->children()[0]->boundary();
 			spiritsaway::shape_drawer::Line temp_split_line;
@@ -581,17 +581,17 @@ json load_json_file(const std::string& file_path)
 	return json::parse(str);
 }
 
-void space_draw_container::calc_captions(const spiritsaway::utility::space_cells& cur_cell_region)
+void space_draw_container::calc_captions(const spiritsaway::distributed_space::space_cells& cur_cell_region)
 {
 	auto cur_root_node = cur_cell_region.root_node();
-	std::vector<const spiritsaway::utility::space_cells::cell_node*> process_queue;
+	std::vector<const spiritsaway::distributed_space::space_cells::space_node*> process_queue;
 	process_queue.push_back(cur_root_node);
 	while (!process_queue.empty())
 	{
 		auto cur_top = process_queue.back();
 		process_queue.pop_back();
 		std::string result_caption;
-		if (cur_top->is_leaf())
+		if (cur_top->is_leaf_cell())
 		{
 			result_caption += "LeafNode-" + cur_top->space_id() +  " Boundary(" + json(cur_top->boundary()).dump() + ") " + " Game(" + cur_top->game_id() + ") ";
 			int real_num = 0;
@@ -622,7 +622,7 @@ void space_draw_container::calc_captions(const spiritsaway::utility::space_cells
 			{
 				result_caption += " Child" + std::to_string(i) + "(";
 				auto cur_child = cur_top->children()[i];
-				if (cur_child->is_leaf())
+				if (cur_child->is_leaf_cell())
 				{
 					result_caption += "LeafNode-" + cur_child->space_id();
 				}
@@ -640,14 +640,14 @@ void space_draw_container::calc_captions(const spiritsaway::utility::space_cells
 		}
 	}
 }
-void draw_cell_region(const spiritsaway::utility::space_cells& cur_cell_region, const space_draw_config& draw_config, const std::string& folder_path, const std::string& file_name_prefix)
+void draw_cell_region(const spiritsaway::distributed_space::space_cells& cur_cell_region, const space_draw_config& draw_config, const std::string& folder_path, const std::string& file_name_prefix)
 {
 	space_draw_container cur_cell_configuration;
 	cur_cell_configuration.draw_config = draw_config;
 	cur_cell_configuration.ghost_radius = cur_cell_region.ghost_radius();
 	for (const auto& [one_cell_id, one_cell_ptr] : cur_cell_region.all_leafs())
 	{
-		if (one_cell_ptr->is_leaf())
+		if (one_cell_ptr->is_leaf_cell())
 		{
 			cell_region_config new_leaf_config;
 			new_leaf_config.min_xy.x = one_cell_ptr->boundary().min.x;

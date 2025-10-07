@@ -88,13 +88,13 @@ struct cell_region_config
 	}
 	bool intersect(const cell_region_config& other, float boundary_radius) const
 	{
-		spiritsaway::utility::cell_bound aabb1;
+		spiritsaway::distributed_space::cell_bound aabb1;
 		aabb1.min.x = min_xy.x;
 		aabb1.min.z = min_xy.y;
 		aabb1.max.x = max_xy.x;
 		aabb1.max.z = max_xy.y;
 
-		spiritsaway::utility::cell_bound aabb2;
+		spiritsaway::distributed_space::cell_bound aabb2;
 		aabb2.min.x = other.min_xy.x - boundary_radius;
 		aabb2.min.z = other.min_xy.y - boundary_radius;
 		aabb2.max.x = other.max_xy.x + boundary_radius;
@@ -138,8 +138,8 @@ struct space_draw_container
 	bool calc_region_colors();
 	void calc_agents();
 	void calc_canvas();
-	void calc_split_lines(const spiritsaway::utility::space_cells& cur_cell_region);
-	void calc_captions(const spiritsaway::utility::space_cells& cur_cell_region);
+	void calc_split_lines(const spiritsaway::distributed_space::space_cells& cur_cell_region);
+	void calc_captions(const spiritsaway::distributed_space::space_cells& cur_cell_region);
 	Point convert_pos_to_canvas(const Point& origin) const;
 	void draw_png(spiritsaway::shape_drawer::PngImage& out_png) const;
 	void draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg) const;

@@ -1,7 +1,7 @@
 #include "space_cells.h"
 #include <random>
 #include <fstream>
-using namespace spiritsaway::utility;
+using namespace spiritsaway::distributed_space;
 
 std::string format_timepoint(std::uint64_t milliseconds_since_epoch)
 {
@@ -54,7 +54,7 @@ void generate_random_entity_load(space_cells& cur_space, int num)
 		temp_bound.max.z += cur_space.ghost_radius();
 		point_ghost_bound.push_back(temp_bound);
 	}
-	std::vector<const space_cells::cell_node*> real_cells_for_pos;
+	std::vector<const space_cells::space_node*> real_cells_for_pos;
 	for (auto one_point : temp_random_points)
 	{
 		auto cur_real_cell = cur_space.query_leaf_for_point(one_point.x, one_point.z);
@@ -62,7 +62,7 @@ void generate_random_entity_load(space_cells& cur_space, int num)
 	}
 	for (const auto& [one_space_id, one_cell] : cur_space.all_leafs())
 	{
-		if (!one_cell->is_leaf())
+		if (!one_cell->is_leaf_cell())
 		{
 			continue;
 		}

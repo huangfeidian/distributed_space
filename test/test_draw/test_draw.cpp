@@ -1,7 +1,7 @@
 #include "../space_draw/space_draw.h"
 #include <chrono>
 
-using namespace spiritsaway::utility;
+using namespace spiritsaway::distributed_space;
 
 std::string format_timepoint(std::uint64_t milliseconds_since_epoch)
 {

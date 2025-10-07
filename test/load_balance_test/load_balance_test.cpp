@@ -7,7 +7,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
 
-using namespace spiritsaway::utility;
+using namespace spiritsaway::distributed_space;
 
 void dump_json_to_file(const json& data, const std::string& path)
 {
@@ -87,7 +87,7 @@ std::unordered_map<std::string, point_xz> generate_random_entity_load(space_cell
 		temp_bound.max.z += cur_space.ghost_radius();
 		point_ghost_bound.push_back(temp_bound);
 	}
-	std::vector<const space_cells::cell_node*> real_cells_for_pos;
+	std::vector<const space_cells::space_node*> real_cells_for_pos;
 	for (auto one_point : temp_random_points)
 	{
 		auto cur_real_cell = cur_space.query_leaf_for_point(one_point.x, one_point.z);
@@ -95,7 +95,7 @@ std::unordered_map<std::string, point_xz> generate_random_entity_load(space_cell
 	}
 	for (const auto& [one_space_id, one_cell] : cur_space.all_leafs())
 	{
-		if (!one_cell->is_leaf())
+		if (!one_cell->is_leaf_cell())
 		{
 			continue;
 		}
@@ -137,7 +137,7 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 	std::unordered_map<std::string, float> result_game_loads;
 	for (const auto& [one_space_id, one_cell] : cur_space.all_leafs())
 	{
-		if (!one_cell->is_leaf())
+		if (!one_cell->is_leaf_cell())
 		{
 			continue;
 		}
@@ -201,7 +201,7 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 	}
 	for (const auto& [one_space_id, one_cell] : cur_space.all_leafs())
 	{
-		if (!one_cell->is_leaf())
+		if (!one_cell->is_leaf_cell())
 		{
 			continue;
 		}
