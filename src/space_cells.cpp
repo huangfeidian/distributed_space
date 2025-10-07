@@ -1035,7 +1035,7 @@ namespace spiritsaway::utility
 
 	}
 
-	double space_cells::cell_node::calc_max_boundary_move_length(bool is_x, bool is_split_axis_smaller) const
+	double space_cells::cell_node::calc_max_boundary_move_length(bool is_x, bool is_split_pos_smaller) const
 	{
 		auto cur_axis = is_x ? 0 : 1;
 		if (is_leaf())
@@ -1048,38 +1048,38 @@ namespace spiritsaway::utility
 			{
 				if (m_is_split_x)
 				{
-					if (is_split_axis_smaller)
+					if (is_split_pos_smaller)
 					{
-						return m_children[1]->calc_max_boundary_move_length(is_x, is_split_axis_smaller);
+						return m_children[1]->calc_max_boundary_move_length(is_x, is_split_pos_smaller);
 					}
 					else
 					{
-						return m_children[0]->calc_max_boundary_move_length(is_x, is_split_axis_smaller);
+						return m_children[0]->calc_max_boundary_move_length(is_x, is_split_pos_smaller);
 					}
 					
 				}
 				else
 				{
-					return std::min(m_children[0]->calc_max_boundary_move_length(is_x, is_split_axis_smaller), m_children[1]->calc_max_boundary_move_length(is_x, is_split_axis_smaller));
+					return std::min(m_children[0]->calc_max_boundary_move_length(is_x, is_split_pos_smaller), m_children[1]->calc_max_boundary_move_length(is_x, is_split_pos_smaller));
 				}
 			}
 			else
 			{
 				if (m_is_split_x)
 				{
-					return std::min(m_children[0]->calc_max_boundary_move_length(is_x, is_split_axis_smaller), m_children[1]->calc_max_boundary_move_length(is_x, is_split_axis_smaller));
+					return std::min(m_children[0]->calc_max_boundary_move_length(is_x, is_split_pos_smaller), m_children[1]->calc_max_boundary_move_length(is_x, is_split_pos_smaller));
 					
 
 				}
 				else
 				{
-					if (is_split_axis_smaller)
+					if (is_split_pos_smaller)
 					{
-						return m_children[1]->calc_max_boundary_move_length(is_x, is_split_axis_smaller);
+						return m_children[1]->calc_max_boundary_move_length(is_x, is_split_pos_smaller);
 					}
 					else
 					{
-						return m_children[0]->calc_max_boundary_move_length(is_x, is_split_axis_smaller);
+						return m_children[0]->calc_max_boundary_move_length(is_x, is_split_pos_smaller);
 					}
 				}
 			}
@@ -1087,32 +1087,16 @@ namespace spiritsaway::utility
 		}
 		
 	}
-	void space_cells::cell_node::move_split_pos(double new_split_pos, bool is_x, bool is_split_axis_smaller)
+	void space_cells::cell_node::update_boundary_with_new_split(double new_split_pos, bool is_x, bool is_split_pos_smaller, bool is_changing_max)
 	{
 		auto cur_axis = is_x ? 0 : 1;
-		if (is_split_axis_smaller)
+		if (is_changing_max)
 		{
-			if (this == m_parent->children()[0])
-			{
-				m_boundary.max[cur_axis] = std::min(m_boundary.max[cur_axis], new_split_pos);
-			}
-			else
-			{
-				m_boundary.min[cur_axis] = std::min(m_boundary.min[cur_axis], new_split_pos);
-			}
-
+			m_boundary.max[cur_axis] = new_split_pos;
 		}
 		else
 		{
-			if (this == m_parent->children()[1])
-			{
-				m_boundary.min[cur_axis] = std::max(m_boundary.min[cur_axis], new_split_pos);
-
-			}
-			else
-			{
-				m_boundary.max[cur_axis] = std::max(m_boundary.max[cur_axis], new_split_pos);
-			}
+			m_boundary.min[cur_axis] = new_split_pos;
 		}
 		if (is_leaf())
 		{
@@ -1126,38 +1110,38 @@ namespace spiritsaway::utility
 			{
 				if (m_is_split_x)
 				{
-					if (is_split_axis_smaller)
+					if (is_changing_max)
 					{
-						return m_children[1]->move_split_pos(new_split_pos, is_x, is_split_axis_smaller);
+						return m_children[1]->update_boundary_with_new_split(new_split_pos, is_x, is_split_pos_smaller, is_changing_max);
 					}
 					else
 					{
-						return m_children[0]->move_split_pos(new_split_pos, is_x, is_split_axis_smaller);
+						return m_children[0]->update_boundary_with_new_split(new_split_pos, is_x, is_split_pos_smaller, is_changing_max);
 					}
 
 				}
 				else
 				{
-					m_children[1]->move_split_pos(new_split_pos, is_x, is_split_axis_smaller);
-					m_children[0]->move_split_pos(new_split_pos, is_x, is_split_axis_smaller);
+					m_children[1]->update_boundary_with_new_split(new_split_pos, is_x, is_split_pos_smaller, is_changing_max);
+					m_children[0]->update_boundary_with_new_split(new_split_pos, is_x, is_split_pos_smaller, is_changing_max);
 				}
 			}
 			else
 			{
 				if (m_is_split_x)
 				{
-					m_children[1]->move_split_pos(new_split_pos, is_x, is_split_axis_smaller);
-					m_children[0]->move_split_pos(new_split_pos, is_x, is_split_axis_smaller);
+					m_children[1]->update_boundary_with_new_split(new_split_pos, is_x, is_split_pos_smaller, is_changing_max);
+					m_children[0]->update_boundary_with_new_split(new_split_pos, is_x, is_split_pos_smaller, is_changing_max);
 				}
 				else
 				{
-					if (is_split_axis_smaller)
+					if (is_changing_max)
 					{
-						return m_children[1]->move_split_pos(new_split_pos, is_x, is_split_axis_smaller);
+						return m_children[1]->update_boundary_with_new_split(new_split_pos, is_x, is_split_pos_smaller, is_changing_max);
 					}
 					else
 					{
-						return m_children[0]->move_split_pos(new_split_pos, is_x, is_split_axis_smaller);
+						return m_children[0]->update_boundary_with_new_split(new_split_pos, is_x, is_split_pos_smaller, is_changing_max);
 					}
 				}
 			}
@@ -1211,23 +1195,23 @@ namespace spiritsaway::utility
 		}
 		auto mutable_cur_node = m_internal_nodes[cur_node->space_id()];
 		assert(mutable_cur_node);
-		mutable_cur_node->children()[0]->move_split_pos(split_v, cur_node->is_split_x(), split_v < pre_split_pos);
-		mutable_cur_node->children()[1]->move_split_pos(split_v, cur_node->is_split_x(), split_v < pre_split_pos);
+		mutable_cur_node->children()[0]->update_boundary_with_new_split(split_v, cur_node->is_split_x(), split_v < pre_split_pos, true);
+		mutable_cur_node->children()[1]->update_boundary_with_new_split(split_v, cur_node->is_split_x(), split_v < pre_split_pos, false);
 		return true;
 	}
 
-	float space_cells::cell_node::calc_move_split_offload(double new_split_pos, bool is_x, bool is_split_axis_smaller) const
+	float space_cells::cell_node::calc_move_split_offload(double new_split_pos, bool is_x, bool is_split_pos_smaller) const
 	{
 		auto cur_axis = is_x ? 0 : 1;
 		if (is_leaf())
 		{
-			auto cur_sorted_load_idx_copy = vec_iter_wrapper(m_sorted_entity_load_idx_by_axis[cur_axis], is_split_axis_smaller);
+			auto cur_sorted_load_idx_copy = vec_iter_wrapper(m_sorted_entity_load_idx_by_axis[cur_axis], is_split_pos_smaller);
 			
 			float temp_gain = 0;
 			while (cur_sorted_load_idx_copy.valid())
 			{
 				auto one_index = cur_sorted_load_idx_copy.get_and_next();
-				if (is_split_axis_smaller)
+				if (is_split_pos_smaller)
 				{
 					if (m_entity_loads[one_index].pos[cur_axis] < new_split_pos)
 					{
@@ -1251,36 +1235,36 @@ namespace spiritsaway::utility
 			{
 				if (m_is_split_x)
 				{
-					if (is_split_axis_smaller)
+					if (is_split_pos_smaller)
 					{
-						return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_split_axis_smaller);
+						return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_split_pos_smaller);
 					}
 					else
 					{
-						return m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_split_axis_smaller);
+						return m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_split_pos_smaller);
 					}
 
 				}
 				else
 				{
-					return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_split_axis_smaller) + m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_split_axis_smaller);
+					return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_split_pos_smaller) + m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_split_pos_smaller);
 				}
 			}
 			else
 			{
 				if (m_is_split_x)
 				{
-					return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_split_axis_smaller) + m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_split_axis_smaller);
+					return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_split_pos_smaller) + m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_split_pos_smaller);
 				}
 				else
 				{
-					if (is_split_axis_smaller)
+					if (is_split_pos_smaller)
 					{
-						return m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_split_axis_smaller);
+						return m_children[0]->calc_move_split_offload(new_split_pos, is_x, is_split_pos_smaller);
 					}
 					else
 					{
-						return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_split_axis_smaller);
+						return m_children[1]->calc_move_split_offload(new_split_pos, is_x, is_split_pos_smaller);
 					}
 				}
 			}
@@ -1339,8 +1323,8 @@ namespace spiritsaway::utility
 
 	double space_cells::cell_node::calc_best_shrink_new_split_pos(const cell_load_balance_param& lb_param, const double ghost_radius) const
 	{
-		bool is_split_axis_smaller = m_parent->m_children[0] == this;
-		auto max_move_length = calc_max_boundary_move_length(m_parent->is_split_x(), is_split_axis_smaller);
+		bool is_split_pos_smaller = m_parent->m_children[0] == this;
+		auto max_move_length = calc_max_boundary_move_length(m_parent->is_split_x(), is_split_pos_smaller);
 		max_move_length -= 5 * ghost_radius;
 		auto move_unit = max_move_length / 10;
 		auto cur_split_pos = m_boundary.min.x;
@@ -1348,7 +1332,7 @@ namespace spiritsaway::utility
 		{
 			if (m_parent->is_split_x())
 			{
-				if (is_split_axis_smaller)
+				if (is_split_pos_smaller)
 				{
 					cur_split_pos = m_boundary.max.x - ghost_radius - i * move_unit;
 				}
@@ -1359,7 +1343,7 @@ namespace spiritsaway::utility
 			}
 			else
 			{
-				if (is_split_axis_smaller)
+				if (is_split_pos_smaller)
 				{
 					cur_split_pos = m_boundary.max.z - ghost_radius - i * move_unit;
 				}
@@ -1368,7 +1352,7 @@ namespace spiritsaway::utility
 					cur_split_pos = m_boundary.min.z + ghost_radius + i * move_unit;
 				}
 			}
-			auto cur_split_offload = calc_move_split_offload(cur_split_pos, m_parent->is_split_x(), is_split_axis_smaller);
+			auto cur_split_offload = calc_move_split_offload(cur_split_pos, m_parent->is_split_x(), is_split_pos_smaller);
 			if (cur_split_offload > lb_param.min_sibling_game_load_diff_when_shrink / 2)
 			{
 				return cur_split_pos;

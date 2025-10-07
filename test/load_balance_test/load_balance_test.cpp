@@ -145,7 +145,7 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 		int temp_migrate_num = 0;
 		for (const auto& one_entity_load : one_cell->get_entity_loads())
 		{
-			if (one_entity_load.is_real)
+			if (one_entity_load.is_real && entity_poses.find(one_entity_load.name) != entity_poses.end())
 			{
 				if (!one_cell->boundary().cover(one_entity_load.pos.x, one_entity_load.pos.z) && temp_migrate_num < max_cell_migrate_num)
 				{
@@ -171,7 +171,7 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 		}
 	}
 
-	std::vector< cell_bound> point_ghost_bound;
+	std::vector< cell_bound> point_ghost_bounds;
 	std::vector<point_xz> entity_pos_vec;
 	std::vector<std::string> entity_names;
 	for (const auto& [one_entity_id, one_point] : entity_poses)
@@ -183,7 +183,7 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 		temp_bound.min.z -= cur_space.ghost_radius();
 		temp_bound.max.x += cur_space.ghost_radius();
 		temp_bound.max.z += cur_space.ghost_radius();
-		point_ghost_bound.push_back(temp_bound);
+		point_ghost_bounds.push_back(temp_bound);
 		entity_pos_vec.push_back(one_point);
 		entity_names.push_back(one_entity_id);
 	}
@@ -208,9 +208,9 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 		std::vector< entity_load> temp_entity_loads;
 		auto cur_cell_bound = one_cell->boundary();
 		float total_load = 4.0;
-		for (int i = 0; i < point_ghost_bound.size(); i++)
+		for (int i = 0; i < point_ghost_bounds.size(); i++)
 		{
-			if (one_cell->space_id() == real_cells_for_pos[i] || point_ghost_bound[i].intersect(cur_cell_bound))
+			if (one_cell->space_id() == real_cells_for_pos[i] || point_ghost_bounds[i].intersect(cur_cell_bound))
 			{
 				entity_load temp_entity_load;
 				temp_entity_load.name = entity_names[i];
@@ -310,6 +310,8 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 		cur_logger->info("space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
 	}
 }
+
+// 基础的等待负载均衡到达稳态
 void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
 {
 	cell_bound temp_bound;
@@ -370,6 +372,76 @@ void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir
 
 }
 
+// 预先划分 然后等待自动调节到稳态
+void lb_case_2(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
+{
+	cell_bound temp_bound;
+	temp_bound.min.x = -10000;
+	temp_bound.max.x = 15000;
+	temp_bound.min.z = 8000;
+	temp_bound.max.z = 17000;
+	cell_load_balance_param cur_lb_param;
+	cur_lb_param.load_to_offset = 10;
+	cur_lb_param.max_cell_load_when_remove = 6;
+	cur_lb_param.min_cell_load_report_counter_when_remove = 10;
+	cur_lb_param.min_cell_load_report_counter_when_shrink = 2;
+	cur_lb_param.min_cell_load_report_counter_when_split = 4;
+	cur_lb_param.min_cell_load_when_shrink = 20;
+	cur_lb_param.min_cell_load_when_split = 40;
+	cur_lb_param.min_game_load_when_split = 80;
+	cur_lb_param.min_sibling_game_load_diff_when_shrink = 15;
+
+	std::string root_space_id = "space1";
+	std::vector<std::string> games = { "game0", "game1", "game2", "game3", "game4" };
+	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
+	cur_space.set_ready(root_space_id);
+	// 预先划分为四个
+	cur_space.split_x(-9000, "space1", "game1", "space1", "space2");
+	cur_space.set_ready("space2");
+	cur_space.split_z(10000, "space1", "game2", "space1", "space3");
+	cur_space.set_ready("space3");
+	cur_space.split_z(11000, "space2", "game3", "space4", "space2");
+	cur_space.set_ready("space4");
+
+	std::vector<point_xz> temp_random_points;
+	if (input_path.empty())
+	{
+		temp_random_points = generate_random_points(cur_space.root_node()->boundary(), 200);
+	}
+	else
+	{
+		auto input_point_json = load_json_file(input_path);
+		input_point_json.get_to(temp_random_points);
+	}
+
+	auto cur_entity_poses = generate_random_entity_load(cur_space, temp_random_points);
+	std::string cur_result_dir = dest_dir + "/lb_case2";
+	std::filesystem::create_directories(cur_result_dir);
+	dump_json_to_file(json(temp_random_points), cur_result_dir + "/" + "input_points.json");
+	draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_0");
+	dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_0" + ".json");
+	for (int i = 5; i < 40; i++)
+	{
+		logger->warn("iteration {}", i);
+		auto cur_game_loads = do_migrate(cur_space, 20, cur_entity_poses, logger);
+		for (const auto& one_game : games)
+		{
+			if (!cur_game_loads.count(one_game))
+			{
+				cur_game_loads[one_game] = 1.0;
+			}
+		}
+		logger->info("game_loads {}", json(cur_game_loads).dump());
+		cur_space.update_load_stat(cur_game_loads);
+		do_balance(cur_space, cur_lb_param, cur_game_loads, i, logger);
+		logger->info("balance finish");
+		draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_" + std::to_string(i + 1));
+		dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_" + std::to_string(i + 1) + ".json");
+	}
+
+}
+
+
 int main(int argc, const char** argv)
 {
 	if (argc < 2)
@@ -397,7 +469,9 @@ int main(int argc, const char** argv)
 	auto microsecondsUTC = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	auto cur_folder_name = "dump_space_" + format_timepoint(microsecondsUTC);
 	auto cur_logger = create_logger("load_balance");
-	cur_logger->info("lb_case_1");
-	lb_case_1(cur_draw_config, cur_folder_name, cur_logger, "./dump_space_2025_10_07_19_53_38/lb_case1/input_points.json");
+	//cur_logger->info("lb_case_1");
+	//lb_case_1(cur_draw_config, cur_folder_name, cur_logger, "");
+	cur_logger->info("lb_case_2");
+	lb_case_2(cur_draw_config, cur_folder_name, cur_logger, "");
 	return 1;
 }

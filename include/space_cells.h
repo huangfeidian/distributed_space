@@ -199,13 +199,14 @@ namespace spiritsaway::utility
 			// 计算当前节点的某个边界朝指定方向移动移动时的最大长度
 			// 要求移动后任意子节点仍然有面积 这里暂时不考虑ghost_radius
 
-			double calc_max_boundary_move_length(bool is_x, bool is_split_axis_smaller) const;
+			double calc_max_boundary_move_length(bool is_x, bool is_split_pos_smaller) const;
 
-			// 递归的移动当前区域的某个边界 is_x代表坐标轴 is_split_axis_smaller代表是缩小还是放大
-			void move_split_pos(double new_split_pos, bool is_x, bool is_split_axis_smaller);
+			// 递归的移动当前区域的某个边界 is_x代表坐标轴 is_split_pos_smaller代表是缩小还是放大
+			// is_changing_max代表是否修改boundary.max还是min
+			void update_boundary_with_new_split(double new_split_pos, bool is_x, bool is_split_pos_smaller, bool is_changing_max);
 
 			// 计算在以这个新的分割轴进行分割的时候 能够缩小的entity_load总和
-			float calc_move_split_offload(double new_split_pos, bool is_x, bool is_split_axis_smaller) const;
+			float calc_move_split_offload(double new_split_pos, bool is_x, bool is_split_pos_smaller) const;
 
 			bool check_can_shrink(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param, const double ghost_radius) const;
 
