@@ -608,8 +608,8 @@ void lb_case_4(const space_draw_config& draw_config, const std::string& dest_dir
 	std::unordered_map<std::string, point_xz> entity_pos_copy;
 	for (const auto& one_entity : cur_entity_poses)
 	{
-		// 删除x轴小于0的
-		if (one_entity.second.x > 10000)
+		// 删除x轴大于-8000的
+		if (one_entity.second.x < -8000)
 		{
 			entity_pos_copy[one_entity.first] = one_entity.second;
 		}

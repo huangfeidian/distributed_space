@@ -307,25 +307,64 @@ namespace spiritsaway::distributed_space
 		m_entity_loads.clear();
 		m_cell_load_report_counter = 1;
 		m_space_id = dest;
+		space_node* dest_cell = nullptr;
 		if (m_children[0]->space_id() == dest)
 		{
-			m_game_id = m_children[0]->game_id();
-			m_entity_loads = std::move(m_children[0]->m_entity_loads);
-			m_sorted_entity_load_idx_by_axis = std::move(m_children[0]->m_sorted_entity_load_idx_by_axis);
-			m_cell_loads[1] = m_children[0]->get_latest_load();
+			dest_cell = m_children[0];
+			if (m_children[0]->is_leaf_cell())
+			{
+				m_game_id = m_children[0]->game_id();
+				m_entity_loads = std::move(m_children[0]->m_entity_loads);
+				m_sorted_entity_load_idx_by_axis = std::move(m_children[0]->m_sorted_entity_load_idx_by_axis);
+				m_cell_loads[1] = m_children[0]->get_latest_load();
+			}
+			else
+			{
+				double new_split_pos = m_is_split_x ? m_boundary.max.x : m_boundary.max.z;
+				m_children[0]->update_boundary_with_new_split(new_split_pos, m_is_split_x, false, true);
+
+			}
+			
 		}
 		else
 		{
-			m_game_id = m_children[1]->game_id();
-			m_entity_loads = std::move(m_children[1]->m_entity_loads);
-			m_sorted_entity_load_idx_by_axis = std::move(m_children[1]->m_sorted_entity_load_idx_by_axis);
-			m_cell_loads[1] = m_children[1]->get_latest_load();
+			dest_cell = m_children[1];
+			if (m_children[1]->is_leaf_cell())
+			{
+				m_game_id = m_children[1]->game_id();
+				m_entity_loads = std::move(m_children[1]->m_entity_loads);
+				m_sorted_entity_load_idx_by_axis = std::move(m_children[1]->m_sorted_entity_load_idx_by_axis);
+				m_cell_loads[1] = m_children[1]->get_latest_load();
+			}
+			else
+			{
+				double new_split_pos = m_is_split_x ? m_boundary.min.x : m_boundary.min.z;
+				m_children[1]->update_boundary_with_new_split(new_split_pos, m_is_split_x, true, false);
+			}
+			
 		}
 		m_ready = true;
-		delete m_children[0];
-		delete m_children[1];
-		m_children[0] = nullptr;
-		m_children[1] = nullptr;
+		if (dest_cell->is_leaf_cell())
+		{
+			delete m_children[0];
+			delete m_children[1];
+			m_children[0] = nullptr;
+			m_children[1] = nullptr;
+		}
+		else
+		{
+			auto old_children = m_children;
+			m_children = dest_cell->children();
+			m_is_split_x = dest_cell->is_split_x();
+			for (auto one_child : m_children)
+			{
+				one_child->m_parent = this;
+			}
+			delete old_children[0];
+			delete old_children[1];
+			
+		}
+		
 	}
 
 	
@@ -350,7 +389,7 @@ namespace spiritsaway::distributed_space
 			return {};
 		}
 		auto sibling_node = remove_node->sibling();
-		if (!sibling_node || !sibling_node->is_leaf_cell())
+		if (!sibling_node)
 		{
 			return {};
 		}
@@ -358,7 +397,7 @@ namespace spiritsaway::distributed_space
 		{
 			return {};
 		}
-		
+		bool is_sibling_leaf = sibling_node->is_leaf_cell();
 		auto cur_parent = remove_node->parent();
 		if(!cur_parent)
 		{
@@ -368,10 +407,17 @@ namespace spiritsaway::distributed_space
 		m_internal_nodes.erase(cur_parent->space_id());
 		auto dest_space_id = sibling_node->space_id();
 		cur_parent->merge_to_child(dest_space_id);
-		
 		m_leaf_nodes.erase(remove_node_iter);
-		m_leaf_nodes.erase(dest_space_id);
-		m_leaf_nodes[dest_space_id] = cur_parent;
+		if (is_sibling_leaf)
+		{
+			m_leaf_nodes.erase(dest_space_id);
+			m_leaf_nodes[dest_space_id] = cur_parent;
+		}
+		else
+		{
+			m_internal_nodes[dest_space_id] = cur_parent;
+		}
+		
 		return remove_node_game_id;
 	}
 	bool space_cells::check_valid_space_id(const std::string& space_id) const
@@ -835,7 +881,7 @@ namespace spiritsaway::distributed_space
 				continue;
 			}
 			auto cur_sibling = one_cell_node->sibling();
-			if (!cur_sibling || cur_sibling->cell_load_report_counter() <= lb_param.min_cell_load_report_counter_when_remove)
+			if (!cur_sibling || cur_sibling->m_min_cell_load_report_counter <= lb_param.min_cell_load_report_counter_when_remove)
 			{
 				continue;
 			}
