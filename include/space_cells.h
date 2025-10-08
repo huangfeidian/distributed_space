@@ -110,6 +110,7 @@ namespace spiritsaway::distributed_space
 			std::array<space_node*, 2> m_children;
 			space_node* m_parent = nullptr;
 			bool m_ready = false;
+			bool m_is_merging = false;
 			bool m_is_split_x = false;
 			std::array<float, 4> m_cell_loads;
 			std::vector<entity_load> m_entity_loads;
@@ -143,6 +144,11 @@ namespace spiritsaway::distributed_space
 			{
 				return m_ready;
 			}
+			bool is_merging() const
+			{
+				return m_is_merging;
+			}
+
 			const auto& get_entity_loads() const
 			{
 				return m_entity_loads;
@@ -216,6 +222,7 @@ namespace spiritsaway::distributed_space
 		private:
 			bool set_child(int index, space_node* new_child);
 			void set_ready();
+			void set_is_merging();
 			void on_split(int master_child_index);
 			void make_sorted_loads();
 			friend class space_cells;
@@ -248,7 +255,7 @@ namespace spiritsaway::distributed_space
 		// 选择一个合适的cell来删除 删除要求
 		// 1. 这个cell的负载要小于指定阈值 max_cell_load
 		// 2. 选取其中 cell load最小的
-		const space_node* get_best_cell_to_remove(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
+		const space_node* get_best_cell_to_merge(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param);
 
 		// 选择一个合适的node来缩容
 		// 1. 这个node的平均game负载起码要大于指定阈值
@@ -276,10 +283,13 @@ namespace spiritsaway::distributed_space
 
 		// 将某个内部节点的分割线移动到split_v
 		bool balance(double split_v, const space_node* cur_node);
+
+		// 将当前节点的boundary缩小到极限 并设置为is_merging
+		bool start_merge(const std::string& cell_id);
 		// 将space_id对应节点合并到space_id对应兄弟节点
 		// 返回对应要删除node的game_id
 		// 失败的情况下返回值都是空
-		std::string merge_to_sibling(const std::string& space_id);
+		std::string finish_merge(const std::string& space_id);
 		std::vector<const space_node*> query_intersect_leafs(const cell_bound& bound) const;
 		const space_node* query_leaf_for_point(double x, double z) const;
 		const std::unordered_map<std::string, space_node*>& cells() const

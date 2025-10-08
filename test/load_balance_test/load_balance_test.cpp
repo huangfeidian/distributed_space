@@ -266,6 +266,19 @@ std::string choose_min_load_game(const std::unordered_map<std::string, float>& g
 }
 void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param, const std::unordered_map<std::string, float>& game_loads, int iteration, std::shared_ptr<spdlog::logger> cur_logger)
 {
+	for (const auto& [one_cell_id, one_cell] : cur_space.cells())
+	{
+		if (one_cell->is_merging())
+		{
+			cur_logger->info("finish merging space {}", one_cell_id);
+			auto cur_sibling_node = one_cell->sibling();
+			cur_logger->info("before finish merging space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+			cur_sibling_node = cur_sibling_node->parent();
+			cur_space.finish_merge(one_cell_id);
+			cur_logger->info("after finish merging space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+			return;
+		}
+	}
 	auto cur_shrink_node = cur_space.get_best_node_to_shrink(game_loads, lb_param);
 	if (cur_shrink_node)
 	{
@@ -301,15 +314,19 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 		}
 	}
 	
-	auto cur_remove_node = cur_space.get_best_cell_to_remove(game_loads, lb_param);
-	if (cur_remove_node)
+	auto cur_merge_node = cur_space.get_best_cell_to_merge(game_loads, lb_param);
+	if (cur_merge_node)
 	{
-		auto cur_sibling_id = cur_remove_node->sibling()->space_id();
-		auto cur_remove_space_id = cur_remove_node->space_id();
-		cur_logger->info("remove space {}", cur_remove_space_id);
-		cur_space.merge_to_sibling(cur_remove_space_id);
-		auto cur_sibling_node = cur_space.get_leaf(cur_sibling_id);
-		cur_logger->info("space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+		auto cur_sibling_node = cur_merge_node->sibling();
+		auto cur_sibling_id = cur_sibling_node->space_id();
+		auto cur_remove_space_id = cur_merge_node->space_id();
+		cur_logger->info("merging space {}", cur_remove_space_id);
+		cur_logger->info("before merge space {} has boundary {}", cur_merge_node->space_id(), json(cur_merge_node->boundary()).dump());
+		cur_logger->info("before merge space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+		cur_space.start_merge(cur_remove_space_id);
+		cur_logger->info("after merge space {} has boundary {}", cur_merge_node->space_id(), json(cur_merge_node->boundary()).dump());
+
+		cur_logger->info("after merge space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
 	}
 }
 

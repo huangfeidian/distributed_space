@@ -87,7 +87,10 @@ namespace spiritsaway::distributed_space
 	{
 		m_ready = true;
 	}
-
+	void space_cells::space_node::set_is_merging()
+	{
+		m_is_merging = true;
+	}
 	float space_cells::space_node::get_smoothed_load() const
 	{
 		float square_sum = 0;
@@ -230,6 +233,7 @@ namespace spiritsaway::distributed_space
 		children_ids[1] = m_children[1]? m_children[1]->m_space_id:std::string{};
 		result["children"] = children_ids;
 		result["ready"] = ready();
+		result["is_merging"] = m_is_merging;
 		if (!is_leaf_cell())
 		{
 			result["is_split_x"] = m_is_split_x;
@@ -368,7 +372,7 @@ namespace spiritsaway::distributed_space
 	}
 
 	
-	std::string space_cells::merge_to_sibling(const std::string& space_id)
+	std::string space_cells::finish_merge(const std::string& space_id)
 	{
 		auto remove_node_iter = m_leaf_nodes.find(space_id);
 		if(remove_node_iter == m_leaf_nodes.end())
@@ -589,6 +593,7 @@ namespace spiritsaway::distributed_space
 		std::string temp_game_id;
 		std::unordered_map<std::string, int> children_indexes;
 		bool temp_ready;
+		bool temp_merging;
 		json::array_t cell_jsons;
 		m_leaf_nodes.clear();
 		if (m_root_node)
@@ -618,6 +623,7 @@ namespace spiritsaway::distributed_space
 				one_node.at("space_id").get_to(temp_space_id);
 				one_node.at("game_id").get_to(temp_game_id);
 				one_node.at("ready").get_to(temp_ready);
+				one_node.at("is_merging").get_to(temp_merging);
 				space_node* parent_node = nullptr;
 
 				if(!parent_space_id.empty())
@@ -644,6 +650,10 @@ namespace spiritsaway::distributed_space
 				if(temp_ready)
 				{
 					new_node->set_ready();
+				}
+				if (temp_merging)
+				{
+					new_node->set_is_merging();
 				}
 				new_node->make_sorted_loads();
 				m_leaf_nodes[temp_space_id] = new_node;
@@ -863,12 +873,16 @@ namespace spiritsaway::distributed_space
 		return best_result;
 	}
 
-	const space_cells::space_node* space_cells::get_best_cell_to_remove(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param)
+	const space_cells::space_node* space_cells::get_best_cell_to_merge(const std::unordered_map<std::string, float>& game_loads, const cell_load_balance_param& lb_param)
 	{
 		const space_cells::space_node* best_result = nullptr;
 		for (const auto& [one_cell_id, one_cell_node] : m_leaf_nodes)
 		{
 			if (!one_cell_node->is_leaf_cell())
+			{
+				continue;
+			}
+			if (one_cell_node->is_merging())
 			{
 				continue;
 			}
@@ -882,6 +896,10 @@ namespace spiritsaway::distributed_space
 			}
 			auto cur_sibling = one_cell_node->sibling();
 			if (!cur_sibling || cur_sibling->m_min_cell_load_report_counter <= lb_param.min_cell_load_report_counter_when_remove)
+			{
+				continue;
+			}
+			if (cur_sibling->is_merging())
 			{
 				continue;
 			}
@@ -911,6 +929,10 @@ namespace spiritsaway::distributed_space
 		}
 		auto cur_sibling = sibling();
 		if (!cur_sibling || cur_sibling->m_min_cell_load_report_counter <= lb_param.min_cell_load_report_counter_when_shrink)
+		{
+			return false;
+		}
+		if (cur_sibling->is_merging())
 		{
 			return false;
 		}
@@ -1416,5 +1438,56 @@ namespace spiritsaway::distributed_space
 	void space_cells::update_load_stat(const std::unordered_map<std::string, float>& game_loads)
 	{
 		m_root_node->update_load_stat(game_loads);
+	}
+
+	bool space_cells::start_merge(const std::string& cell_id)
+	{
+		auto temp_node_iter = m_leaf_nodes.find(cell_id);
+		if (temp_node_iter == m_leaf_nodes.end())
+		{
+			return false;
+		}
+
+		auto cur_node = temp_node_iter->second;
+		if (!cur_node->parent())
+		{
+			return false;
+		}
+		if (cur_node->is_merging())
+		{
+			return false;
+		}
+		cur_node->set_is_merging();
+		auto cur_parent = cur_node->parent();
+		double new_split_pos = cur_node->boundary().min.x + 4 * m_ghost_radius;
+		double old_split_pos = 0;
+		if (cur_parent->is_split_x())
+		{
+			if (cur_node == cur_parent->children()[0])
+			{
+				old_split_pos = cur_node->boundary().max.x;
+				new_split_pos = cur_node->boundary().min.x + 4 * m_ghost_radius;
+			}
+			else
+			{
+				old_split_pos = cur_node->boundary().min.x;
+				new_split_pos = cur_node->boundary().max.x - 4 * m_ghost_radius;
+			}
+		}
+		else
+		{
+			if (cur_node == cur_parent->children()[0])
+			{
+				old_split_pos = cur_node->boundary().max.z;
+				new_split_pos = cur_node->boundary().min.z + 4 * m_ghost_radius;
+			}
+			else
+			{
+				old_split_pos = cur_node->boundary().min.z;
+				new_split_pos = cur_node->boundary().max.z - 4 * m_ghost_radius;
+			}
+		}
+		cur_parent->children()[0]->update_boundary_with_new_split(new_split_pos, cur_parent->is_split_x(), new_split_pos < old_split_pos, true);
+		cur_parent->children()[1]->update_boundary_with_new_split(new_split_pos, cur_parent->is_split_x(), new_split_pos < old_split_pos, false);
 	}
 }
