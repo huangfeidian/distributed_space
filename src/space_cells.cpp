@@ -388,6 +388,10 @@ namespace spiritsaway::distributed_space
 		{
 			return {};
 		}
+		if (!remove_node->is_merging())
+		{
+			return {};
+		}
 		if (remove_node->space_id() == m_master_cell_id)
 		{
 			return {};
