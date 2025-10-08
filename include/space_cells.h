@@ -309,6 +309,20 @@ namespace spiritsaway::distributed_space
 			}
 		}
 
+		const space_node* get_internal(const std::string& space_id) const
+		{
+			auto cur_iter = m_internal_nodes.find(space_id);
+			if (cur_iter == m_internal_nodes.end())
+			{
+				return nullptr;
+			}
+			else
+			{
+				return cur_iter->second;
+			}
+		}
+
+
 		const space_node* root_node() const
 		{
 			return m_root_node;
