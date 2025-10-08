@@ -129,7 +129,7 @@ std::unordered_map<std::string, point_xz> generate_random_entity_load(space_cell
 }
 
 
-// Ö´ĞĞmigrate Ã¿¸öcell×î¶àÇ¨³ömax_cell_migrate_num¸ö
+// æ‰§è¡Œmigrate æ¯ä¸ªcellæœ€å¤šè¿å‡ºmax_cell_migrate_numä¸ª
 std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int max_cell_migrate_num, const std::unordered_map<std::string, point_xz>& entity_poses, std::shared_ptr<spdlog::logger> logger)
 {
 	std::unordered_map<std::string, std::string> entity_to_real_region;
@@ -191,7 +191,7 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 	for (const auto& [one_entity_id, one_point] : entity_poses)
 	{
 		auto& cur_real_cell = entity_to_real_region[one_entity_id];
-		if (cur_real_cell.empty()) // ¶ÔÓ¦Ò»Ğ©±»removeµÄ½ÚµãµÄentity
+		if (cur_real_cell.empty()) // å¯¹åº”ä¸€äº›è¢«removeçš„èŠ‚ç‚¹çš„entity
 		{
 			cur_real_cell = cur_space.query_leaf_for_point(one_point.x, one_point.z)->space_id();
 			region_real_entities[cur_real_cell].push_back(one_entity_id);
@@ -313,7 +313,7 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 	}
 }
 
-// »ù´¡µÄµÈ´ı¸ºÔØ split²¢¾ùºâµ½´ïÎÈÌ¬
+// åŸºç¡€çš„ç­‰å¾…è´Ÿè½½ splitå¹¶å‡è¡¡åˆ°è¾¾ç¨³æ€
 void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
 {
 	cell_bound temp_bound;
@@ -374,7 +374,7 @@ void lb_case_1(const space_draw_config& draw_config, const std::string& dest_dir
 
 }
 
-// Ô¤ÏÈ»®·Ö È»ºóµÈ´ı×Ô¶¯µ÷½Úµ½ÎÈÌ¬
+// é¢„å…ˆåˆ’åˆ† ç„¶åç­‰å¾…è‡ªåŠ¨è°ƒèŠ‚åˆ°ç¨³æ€
 void lb_case_2(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
 {
 	cell_bound temp_bound;
@@ -397,7 +397,7 @@ void lb_case_2(const space_draw_config& draw_config, const std::string& dest_dir
 	std::vector<std::string> games = { "game0", "game1", "game2", "game3", "game4" };
 	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
 	cur_space.set_ready(root_space_id);
-	// Ô¤ÏÈ»®·ÖÎªËÄ¸ö
+	// é¢„å…ˆåˆ’åˆ†ä¸ºå››ä¸ª
 	cur_space.split_x(-9000, "space1", "game1", "space1", "space2");
 	cur_space.set_ready("space2");
 	cur_space.split_z(10000, "space1", "game2", "space1", "space3");
@@ -443,7 +443,7 @@ void lb_case_2(const space_draw_config& draw_config, const std::string& dest_dir
 
 }
 
-// ¾ùºâ»®·Ö È»ºóÉ¾³ıÒ»Ğ©entity µÈ´ı¾ùºâ
+// å‡è¡¡åˆ’åˆ† ç„¶ååˆ é™¤ä¸€äº›entity ç­‰å¾…å‡è¡¡
 void lb_case_3(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
 {
 	cell_bound temp_bound;
@@ -466,7 +466,7 @@ void lb_case_3(const space_draw_config& draw_config, const std::string& dest_dir
 	std::vector<std::string> games = { "game0", "game1", "game2", "game3", "game4" };
 	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
 	cur_space.set_ready(root_space_id);
-	// Ô¤ÏÈ»®·ÖÎªËÄ¸ö
+	// é¢„å…ˆåˆ’åˆ†ä¸ºå››ä¸ª
 	cur_space.split_x(1000, "space1", "game1", "space1", "space2");
 	cur_space.set_ready("space2");
 	cur_space.split_z(12000, "space1", "game2", "space1", "space3");
@@ -512,7 +512,7 @@ void lb_case_3(const space_draw_config& draw_config, const std::string& dest_dir
 	std::unordered_map<std::string, point_xz> entity_pos_copy;
 	for (const auto& one_entity : cur_entity_poses)
 	{
-		// É¾³ıxÖáĞ¡ÓÚ0µÄ
+		// åˆ é™¤xè½´å°äº0çš„
 		if (one_entity.second.x > 0)
 		{
 			entity_pos_copy[one_entity.first] = one_entity.second;
@@ -539,7 +539,7 @@ void lb_case_3(const space_draw_config& draw_config, const std::string& dest_dir
 	}
 }
 
-// ¾ùºâ»®·Ö È»ºóÉ¾³ı¾ø´ó²¿·Öentity µÈ´ıÉ¾³ı
+// å‡è¡¡åˆ’åˆ† ç„¶ååˆ é™¤ç»å¤§éƒ¨åˆ†entity ç­‰å¾…åˆ é™¤
 void lb_case_4(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
 {
 	cell_bound temp_bound;
@@ -562,7 +562,7 @@ void lb_case_4(const space_draw_config& draw_config, const std::string& dest_dir
 	std::vector<std::string> games = { "game0", "game1", "game2", "game3", "game4" };
 	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
 	cur_space.set_ready(root_space_id);
-	// Ô¤ÏÈ»®·ÖÎªËÄ¸ö
+	// é¢„å…ˆåˆ’åˆ†ä¸ºå››ä¸ª
 	cur_space.split_x(1000, "space1", "game1", "space1", "space2");
 	cur_space.set_ready("space2");
 	cur_space.split_z(12000, "space1", "game2", "space1", "space3");
@@ -608,7 +608,7 @@ void lb_case_4(const space_draw_config& draw_config, const std::string& dest_dir
 	std::unordered_map<std::string, point_xz> entity_pos_copy;
 	for (const auto& one_entity : cur_entity_poses)
 	{
-		// É¾³ıxÖá´óÓÚ-8000µÄ
+		// åˆ é™¤xè½´å¤§äº-8000çš„
 		if (one_entity.second.x < -8000)
 		{
 			entity_pos_copy[one_entity.first] = one_entity.second;
