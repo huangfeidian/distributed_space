@@ -1461,6 +1461,10 @@ namespace spiritsaway::distributed_space
 		{
 			return false;
 		}
+		if(cur_node->sibling()->is_merging())
+		{
+			return false;
+		}
 		cur_node->set_is_merging();
 		auto cur_parent = cur_node->parent();
 		double new_split_pos = cur_node->boundary().min.x + 4 * m_ghost_radius;
