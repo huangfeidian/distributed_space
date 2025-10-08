@@ -1489,5 +1489,6 @@ namespace spiritsaway::distributed_space
 		}
 		cur_parent->children()[0]->update_boundary_with_new_split(new_split_pos, cur_parent->is_split_x(), new_split_pos < old_split_pos, true);
 		cur_parent->children()[1]->update_boundary_with_new_split(new_split_pos, cur_parent->is_split_x(), new_split_pos < old_split_pos, false);
+		return true;
 	}
 }
