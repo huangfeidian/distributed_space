@@ -145,28 +145,54 @@ std::unordered_map<std::string, float> do_migrate(space_cells& cur_space, int ma
 		int temp_migrate_num = 0;
 		for (const auto& one_entity_load : one_cell->get_entity_loads())
 		{
+			
 			if (one_entity_load.is_real && entity_poses.find(one_entity_load.name) != entity_poses.end())
 			{
-				if (!one_cell->boundary().cover(one_entity_load.pos.x, one_entity_load.pos.z) && temp_migrate_num < max_cell_migrate_num)
+				auto dest_space_id = one_space_id;
+				if (temp_migrate_num < max_cell_migrate_num)
 				{
-					temp_migrate_num++;
-					auto cur_real_cell = cur_space.query_leaf_for_point(one_entity_load.pos.x, one_entity_load.pos.z);
-					if (one_space_id == cur_real_cell->space_id())
+					if (!one_cell->boundary().cover(one_entity_load.pos.x, one_entity_load.pos.z))
 					{
-						logger->info("entity {} migrate from {} to {}", one_entity_load.name, one_cell->space_id(), cur_real_cell->space_id());
+						auto cur_real_cell = cur_space.query_leaf_for_point(one_entity_load.pos.x, one_entity_load.pos.z);
+						if (cur_real_cell != one_cell && !cur_real_cell->is_merging())
+						{
+							dest_space_id = cur_real_cell->space_id();
+						}
 					}
 					else
 					{
-						logger->info("entity {} migrate from {} to {}", one_entity_load.name, one_cell->space_id(), cur_real_cell->space_id());
+
+						if (one_cell->is_merging())
+						{
+							// 在合并过程中 随机抽取一个周围的其他cell 执行迁移
+							spiritsaway::distributed_space::cell_bound cur_migrate_bound;
+							cur_migrate_bound.min = one_entity_load.pos;
+							cur_migrate_bound.max = one_entity_load.pos;
+							cur_migrate_bound.min.x -= cur_space.ghost_radius();
+							cur_migrate_bound.min.z -= cur_space.ghost_radius();
+							cur_migrate_bound.max.x += cur_space.ghost_radius();
+							cur_migrate_bound.max.z += cur_space.ghost_radius();
+							auto cur_intersect_cells = cur_space.query_intersect_leafs(cur_migrate_bound);
+
+							for (auto cur_real_cell : cur_intersect_cells)
+							{
+								if (cur_real_cell != one_cell && !cur_real_cell->is_merging())
+								{
+									dest_space_id = cur_real_cell->space_id();
+									break;
+								}
+							}
+						}
 					}
-					region_real_entities[cur_real_cell->space_id()].push_back(one_entity_load.name);
-					entity_to_real_region[one_entity_load.name] = cur_real_cell->space_id();
+					if (dest_space_id != one_cell->space_id())
+					{
+						logger->info("entity {} migrate from {} to {}", one_entity_load.name, one_cell->space_id(), dest_space_id);
+						temp_migrate_num++;
+					}
 				}
-				else
-				{
-					region_real_entities[one_cell->space_id()].push_back(one_entity_load.name);
-					entity_to_real_region[one_entity_load.name] = one_space_id;
-				}
+				
+				region_real_entities[dest_space_id].push_back(one_entity_load.name);
+				entity_to_real_region[one_entity_load.name] = dest_space_id;
 			}
 		}
 	}
@@ -270,13 +296,26 @@ void do_balance(space_cells& cur_space, const cell_load_balance_param& lb_param,
 	{
 		if (one_cell->is_merging())
 		{
-			cur_logger->info("finish merging space {}", one_cell_id);
-			auto cur_sibling_node = one_cell->sibling();
-			cur_logger->info("before finish merging space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
-			cur_sibling_node = cur_sibling_node->parent();
-			cur_space.finish_merge(one_cell_id);
-			cur_logger->info("after finish merging space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
-			return;
+			bool has_real_entity = false;
+			for (const auto& one_entity_load : one_cell->get_entity_loads())
+			{
+				if (one_entity_load.is_real)
+				{
+					has_real_entity = true;
+					break;
+				}
+			}
+			if (!has_real_entity)
+			{
+				cur_logger->info("finish merging space {}", one_cell_id);
+				auto cur_sibling_node = one_cell->sibling();
+				cur_logger->info("before finish merging space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+				cur_sibling_node = cur_sibling_node->parent();
+				cur_space.finish_merge(one_cell_id);
+				cur_logger->info("after finish merging space {} has boundary {}", cur_sibling_node->space_id(), json(cur_sibling_node->boundary()).dump());
+				return;
+			}
+			
 		}
 	}
 	auto cur_shrink_node = cur_space.get_best_node_to_shrink(game_loads, lb_param);

@@ -106,7 +106,9 @@ namespace spiritsaway::distributed_space
 		private:
 			std::string m_space_id;
 			std::string m_game_id;
-			cell_bound m_boundary; // boundary的长宽都需要大于四倍的ghost_radius
+			// boundary的长宽都需要大于四倍的ghost_radius
+			// removing状态下的除外 因此此时会缩小到0.5* ghost_radius
+			cell_bound m_boundary; 
 			std::array<space_node*, 2> m_children;
 			space_node* m_parent = nullptr;
 			bool m_ready = false;
@@ -241,6 +243,7 @@ namespace spiritsaway::distributed_space
 		std::string m_master_cell_id;
 
 		// 任何一个cell的长和宽必须大于等于四倍的ghost_radius
+		// removing状态下的除外
 		double m_ghost_radius;
 
 	public:
@@ -284,7 +287,8 @@ namespace spiritsaway::distributed_space
 		// 将某个内部节点的分割线移动到split_v
 		bool balance(double split_v, const space_node* cur_node);
 
-		// 将当前节点的boundary缩小到极限 并设置为is_merging
+		// 将当前节点的boundary缩小到0.5*ghost_radius 并设置为is_merging 
+		// 设置为0.5*ghost_radius的原因是保证在相邻cell中存在ghost
 		bool start_merge(const std::string& cell_id);
 		// 将space_id对应节点合并到space_id对应兄弟节点
 		// 返回对应要删除node的game_id

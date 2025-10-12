@@ -1467,19 +1467,20 @@ namespace spiritsaway::distributed_space
 		}
 		cur_node->set_is_merging();
 		auto cur_parent = cur_node->parent();
-		double new_split_pos = cur_node->boundary().min.x + 4 * m_ghost_radius;
+		auto remain_radius = 0.5 * m_ghost_radius;
+		double new_split_pos = cur_node->boundary().min.x + remain_radius;
 		double old_split_pos = 0;
 		if (cur_parent->is_split_x())
 		{
 			if (cur_node == cur_parent->children()[0])
 			{
 				old_split_pos = cur_node->boundary().max.x;
-				new_split_pos = cur_node->boundary().min.x + 4 * m_ghost_radius;
+				new_split_pos = cur_node->boundary().min.x + remain_radius;
 			}
 			else
 			{
 				old_split_pos = cur_node->boundary().min.x;
-				new_split_pos = cur_node->boundary().max.x - 4 * m_ghost_radius;
+				new_split_pos = cur_node->boundary().max.x - remain_radius;
 			}
 		}
 		else
@@ -1487,12 +1488,12 @@ namespace spiritsaway::distributed_space
 			if (cur_node == cur_parent->children()[0])
 			{
 				old_split_pos = cur_node->boundary().max.z;
-				new_split_pos = cur_node->boundary().min.z + 4 * m_ghost_radius;
+				new_split_pos = cur_node->boundary().min.z + remain_radius;
 			}
 			else
 			{
 				old_split_pos = cur_node->boundary().min.z;
-				new_split_pos = cur_node->boundary().max.z - 4 * m_ghost_radius;
+				new_split_pos = cur_node->boundary().max.z - remain_radius;
 			}
 		}
 		cur_parent->children()[0]->update_boundary_with_new_split(new_split_pos, cur_parent->is_split_x(), new_split_pos < old_split_pos, true);
