@@ -548,7 +548,15 @@ namespace spiritsaway::distributed_space
 				}
 				else
 				{
-					return temp_top->sibling();
+					auto cur_sibling = temp_top->sibling();
+					if(cur_sibling->is_leaf_cell())
+					{
+						return cur_sibling;
+					}
+					else
+					{
+						return nullptr;
+					}
 				}
 			}
 			else
