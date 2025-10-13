@@ -40,6 +40,23 @@ namespace
 }
 namespace spiritsaway::distributed_space
 {
+	json entity_load::encode() const
+	{
+		return json(*this);
+	}
+
+	bool entity_load::decode(const json& data)
+	{
+		try
+		{
+			data.get_to(*this);
+			return true;
+		}
+		catch (std::exception& e)
+		{
+			return false;
+		}
+	}
 	bool cell_bound::intersect(const cell_bound& other) const
 	{
 		if(min.x >= other.max.x)

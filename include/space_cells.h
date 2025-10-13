@@ -73,6 +73,9 @@ namespace spiritsaway::distributed_space
 		bool is_real;
 		std::string name;
 		NLOHMANN_DEFINE_TYPE_INTRUSIVE(entity_load, pos, load, name, is_real)
+
+		json encode() const;
+		bool decode(const json& data);
 	};
 
 
