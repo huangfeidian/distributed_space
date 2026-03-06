@@ -475,7 +475,7 @@ void agent_info::draw_png(spiritsaway::shape_drawer::PngImage& out_png, bool wit
 		out_png << rect1;
 		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(0, 2* rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
 		out_png << rect2;
-		spiritsaway::shape_drawer::Rectangle rect3(pos - Point(-1 * rect_half_extent * radius, -1 * rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[2], true);
+		spiritsaway::shape_drawer::Rectangle rect3(pos - Point(rect_half_extent * radius, 0), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[2], true);
 		out_png << rect3;
 
 	}
@@ -542,7 +542,8 @@ void agent_info::draw_svg(spiritsaway::shape_drawer::SvgGraph& out_svg, bool wit
 		out_svg << rect1;
 		spiritsaway::shape_drawer::Rectangle rect2(pos - Point(0, 2 * rect_half_extent * radius), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[1], true);
 		out_svg << rect2;
-		spiritsaway::shape_drawer::Rectangle rect3(pos - Point(-1 * rect_half_extent * radius, 0), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[2], true);
+		// 修正：去掉多余负号，第三个矩形在 x 方向向左偏移 rect_half_extent*radius
+		spiritsaway::shape_drawer::Rectangle rect3(pos - Point(rect_half_extent * radius, 0), Point(2 * rect_half_extent * radius, 2 * rect_half_extent * radius), region_colors[2], true);
 		out_svg << rect3;
 
 	}

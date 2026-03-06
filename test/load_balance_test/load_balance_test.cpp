@@ -691,7 +691,63 @@ void lb_case_4(const space_draw_config& draw_config, const std::string& dest_dir
 	}
 }
 
+// 生成封面的case
+void draw_cover_case(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
+{
+	cell_bound temp_bound;
+	temp_bound.min.z = -10000;
+	temp_bound.max.z = 15000;
+	temp_bound.min.x = -3000;
+	temp_bound.max.x = 17000;
+	cell_load_balance_param cur_lb_param;
+	cur_lb_param.load_to_offset = 10;
+	cur_lb_param.max_cell_load_when_remove = 20;
+	cur_lb_param.min_cell_load_report_counter_when_remove = 6;
+	cur_lb_param.min_cell_load_report_counter_when_shrink = 2;
+	cur_lb_param.min_cell_load_report_counter_when_split = 4;
+	cur_lb_param.min_cell_load_when_shrink = 20;
+	cur_lb_param.min_cell_load_when_split = 40;
+	cur_lb_param.min_game_load_when_split = 80;
+	cur_lb_param.min_sibling_game_load_diff_when_shrink = 15;
 
+	std::string root_space_id = "space1";
+	std::vector<std::string> games = { "game0", "game1", "game2", "game3", "game4" };
+	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
+	cur_space.set_ready(root_space_id);
+	// 预先划分为四个
+	cur_space.split_z(5000, "space1", "game1", "space1", "space2");
+	cur_space.set_ready("space2");
+	cur_space.split_x(6000, "space1", "game2", "space1", "space3");
+	cur_space.set_ready("space3");
+	cur_space.split_z(0, "space3", "game3", "space3", "space4");
+	cur_space.set_ready("space4");
+
+	cur_space.split_x(10000, "space2", "game4", "space5", "space2");
+	cur_space.set_ready("space5");
+
+
+	std::vector<point_xz> temp_random_points;
+	if (input_path.empty())
+	{
+		for(const auto& [one_space_id, one_cell] : cur_space.all_leafs())
+		{
+			auto temp_points_in_cell = generate_random_points(one_cell->boundary(), 50);
+			temp_random_points.insert(temp_random_points.end(), temp_points_in_cell.begin(), temp_points_in_cell.end());
+		}
+	}
+	else
+	{
+		auto input_point_json = load_json_file(input_path);
+		input_point_json.get_to(temp_random_points);
+	}
+
+	auto cur_entity_poses = generate_random_entity_load(cur_space, temp_random_points);
+	std::string cur_result_dir = dest_dir + "/cover_case";
+	std::filesystem::create_directories(cur_result_dir);
+	dump_json_to_file(json(temp_random_points), cur_result_dir + "/" + "input_points.json");
+	draw_cell_region(cur_space, draw_config, cur_result_dir, "iter_0");
+	dump_json_to_file(cur_space.encode(), cur_result_dir + "/" + "iter_0" + ".json");
+}
 
 int main(int argc, const char** argv)
 {
@@ -726,7 +782,10 @@ int main(int argc, const char** argv)
 	//lb_case_2(cur_draw_config, cur_folder_name, cur_logger, "");
 	//cur_logger->info("lb_case_3");
 	//lb_case_3(cur_draw_config, cur_folder_name, cur_logger, "");
-	cur_logger->info("lb_case_4");
-	lb_case_4(cur_draw_config, cur_folder_name, cur_logger, "");
+	//cur_logger->info("lb_case_4");
+	//lb_case_4(cur_draw_config, cur_folder_name, cur_logger, "");
+
+	cur_logger->info("cover_case");
+	draw_cover_case(cur_draw_config, cur_folder_name, cur_logger, "./dump_space_2026_03_07_00_51_57/cover_case/input_points.json");
 	return 1;
 }
