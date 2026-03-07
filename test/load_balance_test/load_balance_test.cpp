@@ -695,10 +695,10 @@ void lb_case_4(const space_draw_config& draw_config, const std::string& dest_dir
 void draw_cover_case(const space_draw_config& draw_config, const std::string& dest_dir, std::shared_ptr<spdlog::logger> logger, const std::string& input_path)
 {
 	cell_bound temp_bound;
-	temp_bound.min.z = -10000;
-	temp_bound.max.z = 15000;
-	temp_bound.min.x = -3000;
-	temp_bound.max.x = 17000;
+	temp_bound.min.x = -10000;
+	temp_bound.max.x = 15000;
+	temp_bound.min.z = -3000;
+	temp_bound.max.z = 17000;
 	cell_load_balance_param cur_lb_param;
 	cur_lb_param.load_to_offset = 10;
 	cur_lb_param.max_cell_load_when_remove = 20;
@@ -715,14 +715,14 @@ void draw_cover_case(const space_draw_config& draw_config, const std::string& de
 	space_cells cur_space(temp_bound, "game0", root_space_id, 400);
 	cur_space.set_ready(root_space_id);
 	// 预先划分为四个
-	cur_space.split_z(5000, "space1", "game1", "space1", "space2");
+	cur_space.split_x(5000, "space1", "game1", "space1", "space2");
 	cur_space.set_ready("space2");
-	cur_space.split_x(6000, "space1", "game2", "space1", "space3");
+	cur_space.split_z(6000, "space1", "game2", "space1", "space3");
 	cur_space.set_ready("space3");
-	cur_space.split_z(0, "space3", "game3", "space3", "space4");
+	cur_space.split_x(0, "space3", "game3", "space3", "space4");
 	cur_space.set_ready("space4");
 
-	cur_space.split_x(10000, "space2", "game4", "space5", "space2");
+	cur_space.split_z(10000, "space2", "game4", "space5", "space2");
 	cur_space.set_ready("space5");
 
 
@@ -786,6 +786,6 @@ int main(int argc, const char** argv)
 	//lb_case_4(cur_draw_config, cur_folder_name, cur_logger, "");
 
 	cur_logger->info("cover_case");
-	draw_cover_case(cur_draw_config, cur_folder_name, cur_logger, "./dump_space_2026_03_07_00_51_57/cover_case/input_points.json");
+	draw_cover_case(cur_draw_config, cur_folder_name, cur_logger, "");
 	return 1;
 }
